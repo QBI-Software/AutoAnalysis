@@ -16,10 +16,10 @@ import wx
 import wx.html2
 
 from configobj import ConfigObj
-from msdapp.guicontrollers import EVT_RESULT, EVT_DATA
-from msdapp.guicontrollers import MSDController
-from noname import ConfigPanel, FilesPanel, ComparePanel, WelcomePanel, ProcessPanel
-__version__='1.2.0'
+from autoanalysis.controller import EVT_RESULT, EVT_DATA
+from autoanalysis.controller import Controller
+from autoanalysis.gui.appgui import ConfigPanel, FilesPanel, ComparePanel, WelcomePanel, ProcessPanel
+__version__='0.0.0'
 
 ########################################################################
 class HomePanel(WelcomePanel):
@@ -34,7 +34,7 @@ class HomePanel(WelcomePanel):
         img.LoadFile(join('resources', 'MSDPlots.bmp'), wx.BITMAP_TYPE_BMP)
 
         self.m_richText1.BeginFontSize(14)
-        welcome = "Welcome to the MSD Automated Analysis App (v.%s)"% __version__
+        welcome = "Welcome to the Automated Analysis App (v.%s)"% __version__
         self.m_richText1.WriteText(welcome)
         self.m_richText1.EndFontSize()
         self.m_richText1.Newline()
@@ -47,7 +47,7 @@ class HomePanel(WelcomePanel):
         self.m_richText1.WriteImage(img)
         self.m_richText1.Newline()
         self.m_richText1.WriteText(
-            r'''This is a multi-threaded application designed to automate analysis of single particle tracking data.''')
+            r'''This is a multi-threaded application designed to automate analysis.''')
         self.m_richText1.Newline()
         # self.m_richText1.BeginNumberedBullet(1, 0.2, 0.2, wx.TEXT_ATTR_BULLET_STYLE)
         self.m_richText1.BeginBold()
@@ -82,10 +82,6 @@ class HomePanel(WelcomePanel):
         self.m_richText1.Newline()
         self.m_richText1.WriteText(
             "Once the appropriate files have been generated in the output folder, a statistical comparison of two groups can be run and an interactive plot generated.")
-        # self.m_richText1.EndLeftIndent()
-        self.m_richText1.Newline()
-        self.m_richText1.AddParagraph(
-            "The requirements of this application have been provided by Ravi Kasula, Meunier Lab, QBI. The modular design of this application allows for additional processes with minimal effort.  The interactive plots can be saved and shared online via plot.ly if required.  Any issues can be logged via the github repository.")
         self.m_richText1.BeginItalic()
         self.m_richText1.AddParagraph(
             r"Copyright (2017) https://github.com/QBI-Software/MSDAnalysis")
@@ -96,41 +92,17 @@ class HomePanel(WelcomePanel):
 
 
 ########################################################################
-class MSDConfig(ConfigPanel):
+class Config(ConfigPanel):
     def __init__(self, parent):
-        super(MSDConfig, self).__init__(parent)
-        self.encoding = 'ISO-8859-1'
+        super(Config, self).__init__(parent)
+        self.parent = parent
         self.currentconfig= join(expanduser('~'), '.msdcfg')
-        if parent.controller.loaded:
-            self.__loadValues(parent.controller)
+        self.loadController()
+
 
     def loadController(self):
-        pass
+        self.controller = self.parent.controller
 
-    def __loadValues(self, parent):
-        print("Config loaded")
-        self.m_textCtrl15.SetValue(parent.datafile)
-        self.m_textCtrl16.SetValue(parent.msdfile)
-        self.m_textCtrl1.SetValue(parent.histofile)
-        self.m_textCtrl2.SetValue(parent.filteredfname)
-        self.m_textCtrl3.SetValue(parent.filtered_msd)
-        self.m_textCtrl4.SetValue(parent.msdpoints)
-        self.m_textCtrl5.SetValue(parent.timeint)
-        self.m_textCtrl8.SetValue(parent.diffcolumn)
-        self.m_textCtrl9.SetValue(parent.logcolumn)
-        self.m_textCtrl10.SetValue(parent.minlimit)
-        self.m_textCtrl11.SetValue(parent.maxlimit)
-        self.m_textCtrl12.SetValue(parent.binwidth)
-        self.m_textCtrl13.SetValue(parent.threshold)
-        self.m_textCtrl161.SetValue(parent.allstats)
-        self.m_textCtrl18.SetValue(parent.msdcompare)
-        self.m_tcGroup1.SetValue(parent.group1)
-        self.m_tcGroup2.SetValue(parent.group2)
-        self.m_tcCellid.SetValue(parent.cellid)
-        self.m_txtAlllogdfilename.SetValue(parent.batchd)
-        msg = "Config file: %s" % parent.configfile
-        print(msg)
-        self.m_status.SetLabel(msg)
 
     def OnSaveConfig(self, event, configfile=None):
         config = ConfigObj()
@@ -138,41 +110,20 @@ class MSDConfig(ConfigPanel):
             config.filename = configfile
         else:
             config.filename = self.currentconfig
-        config.encoding = self.encoding
-        config['DATA_FILENAME'] = self.m_textCtrl15.GetValue()
-        config['MSD_FILENAME'] = self.m_textCtrl16.GetValue()
-        config['HISTOGRAM_FILENAME'] = self.m_textCtrl1.GetValue()
-        config['FILTERED_FILENAME'] = self.m_textCtrl2.GetValue()
-        config['FILTERED_MSD'] = self.m_textCtrl3.GetValue()
-        config['LOG_COLUMN'] = self.m_textCtrl9.GetValue()
-        config['DIFF_COLUMN'] = self.m_textCtrl8.GetValue()
-        config['MSD_POINTS'] = self.m_textCtrl4.GetValue()
-        config['MINLIMIT'] = self.m_textCtrl10.GetValue()
-        config['MAXLIMIT'] = self.m_textCtrl11.GetValue()
-        config['TIME_INTERVAL'] = self.m_textCtrl5.GetValue()
-        config['BINWIDTH'] = self.m_textCtrl12.GetValue()
-        config['THRESHOLD'] = self.m_textCtrl13.GetValue()
-        config['ALLSTATS_FILENAME'] = self.m_textCtrl161.GetValue()
-        config['AVGMSD_FILENAME'] = self.m_textCtrl18.GetValue()
-        config['GROUP1'] = self.m_tcGroup1.GetValue()
-        config['GROUP2'] = self.m_tcGroup2.GetValue()
-        config['CELLID'] = self.m_tcCellid.GetValue()
-        config['BATCHD_FILENAME'] = self.m_txtAlllogdfilename.GetValue()
+
         config.write()
         # Reload to parent
         try:
-            self.Parent.controller = MSDController(config.filename)
-            if self.Parent.controller.loaded:
-                self.prefixes = [self.Parent.controller.group1, self.Parent.controller.group2]
-                self.Parent.prefixes = self.prefixes
-                for fp in self.Parent.Children:
+            loadedcfg = self.parent.controller.loadConfig(config)
+            if loadedcfg is not None:
+                for fp in self.parent.Children:
                     if isinstance(fp, wx.Panel):
                         fp.loadController()
-            msg = "Config file: %s" % config.filename
+            msg = "Config file saved: %s" % config.filename
             print(msg)
             self.m_status.SetLabel(msg)
         except IOError as e:
-            self.Parent.Warn("Config error:" + e.args[0])
+            self.parent.Warn("Config error:" + e.args[0])
 
     def OnSaveNew(self, event):
         openFileDialog = wx.FileDialog(self, "Save config file", "", "", "Config files (*.cfg)|*",
@@ -187,15 +138,13 @@ class MSDConfig(ConfigPanel):
         print("Load From Config dialog")
         openFileDialog = wx.FileDialog(self, "Open config file", "", "", "Config files (*.cfg)|*",
                                        wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_CHANGE_DIR)
-        openFileDialog.SetDirectory(expanduser('~'))
+        #openFileDialog.SetDirectory(expanduser('~'))
         if openFileDialog.ShowModal() == wx.ID_OK:
             configfile = str(openFileDialog.GetPath())
             try:
-                config = ConfigObj(configfile, encoding='ISO-8859-1')
-                self.Parent.controller.loadConfig(config)
+                config = ConfigObj(configfile)
+                self.parent.controller.loadConfig(config)
                 self.currentconfig=configfile
-                #self.Parent.controller.config.filename = join(expanduser('~'), '.msdcfg')  # save over existing?
-                #self.Parent.controller.config.write()
                 self.__loadValues(self.Parent.controller)
                 self.m_status.SetLabel("Config file: %s" % configfile)
             except IOError as e:
@@ -494,7 +443,6 @@ class ProcessRunPanel(ProcessPanel):
         selections = self.m_checkListProcess.GetCheckedStrings()
         print("Processes selected: ", len(selections))
         showplots = self.m_cbShowplots.GetValue()
-        indivplots = self.m_cbIndivplots.GetValue()
         # Get data from other panels
         filepanel = self.getFilePanel()
         filenames = {'all': [], self.Parent.prefixes[0]: [], self.Parent.prefixes[1]: []}
@@ -581,9 +529,7 @@ class CompareRunPanel(ComparePanel):
         else:
             prefix = ''
         cpanel = self.getConfigPanel()
-        if cpanel is not None:
-            self.m_tcGp1.SetValue(prefix + cpanel.m_tcGroup1.GetValue())
-            self.m_tcGp2.SetValue(prefix + cpanel.m_tcGroup2.GetValue())
+
 
     def updateResults(self, msg):
         (df) = msg.data
@@ -656,7 +602,7 @@ class CompareRunPanel(ComparePanel):
         filepanel = None
 
         for fp in self.Parent.Children:
-            if isinstance(fp, MSDConfig):
+            if isinstance(fp, Config):
                 filepanel = fp
                 break
         return filepanel
@@ -667,19 +613,10 @@ class AppMain(wx.Listbook):
     def __init__(self, parent):
         """Constructor"""
         wx.Listbook.__init__(self, parent, wx.ID_ANY, style=wx.BK_DEFAULT)
-
-        # logging.basicConfig(filename='msdanalysis.log', level=logging.INFO, format='%(asctime)s %(message)s',
-        #                     datefmt='%d-%m-%Y %I:%M:%S %p')
-        self.encoding = 'ISO-8859-1'
-        self.configfile = join(expanduser('~'), '.msdcfg')
-        if not access(self.configfile, R_OK):
-            # use local file in resources
-            self.configfile = join('resources', 'msd.cfg')
-        self.controller = MSDController(self.configfile)
-        if self.controller.loaded:
-            self.prefixes = [self.controller.group1, self.controller.group2]
-        else:
-            self.prefixes = ['stim', 'nostim']  # default
+        self.resourcesdir = join('autoanalysis', 'resources')
+        self.processfile = join(self.resourcesdir, 'processes.yaml')
+        self.configfile = join(self.resourcesdir, 'app.cfg')
+        self.controller = Controller(self.configfile, self.processfile)
 
         self.InitUI()
         self.Centre(wx.BOTH)
@@ -702,7 +639,7 @@ class AppMain(wx.Listbook):
         # self.AssignImageList(il)
 
         pages = [(HomePanel(self), "Welcome"),
-                 (MSDConfig(self), "Configure"),
+                 (Config(self), "Configure"),
                  (FileSelectPanel(self), "Select Files"),
                  (ProcessRunPanel(self), "Run Processes"),
                  (CompareRunPanel(self), "Compare Groups")]
@@ -766,7 +703,7 @@ class MSDFrame(wx.Frame):
     def __init__(self):
         """Constructor"""
         wx.Frame.__init__(self, None, wx.ID_ANY,
-                          "MSD Autoanalysis",
+                          "Auto Analysis App",
                           size=(900, 700)
                           )
 
