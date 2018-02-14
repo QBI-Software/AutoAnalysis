@@ -12,26 +12,20 @@ Created on 7 Feb 2018
 """
 
 import argparse
-import logging
-from os import R_OK, access, remove
-from os.path import join, basename, splitext
+from os.path import join
+
 # #maintain this order of matplotlib
 # import matplotlib
 # matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 # plt.style.use('seaborn-paper')
 import numpy as np
-# from numpy import nan, isnan, mean, median, var, std, exp, histogram,linspace
 import pandas as pd
-import seaborn as sns
-from configobj import ConfigObj
-from plotly import offline
-import plotly.graph_objs as go
 
 from autoanalysis.processmodules.DataParser import AutoData
 
+
 class AutoHistogram(AutoData):
-    def __init__(self, datafile, outputdir, column_name, binwidth,sheet=0, skiprows=0, headers=None,showplots=False):
+    def __init__(self, datafile, outputdir, column_name, binwidth, sheet=0, skiprows=0, headers=None, showplots=False):
         super().__init__(datafile, sheet, skiprows, headers)
         self.showplots = showplots
         self.binwidth = binwidth
@@ -83,58 +77,57 @@ class AutoHistogram(AutoData):
         :return:
         """
         ftype = '_HISTOGRAM'
-
         # Data column
-        xdata = self.data[self.column]
-        #fmin = np.floor(min(xdata))
-        #fmax = np.ceil(max(xdata))
-        #n_bins = int(abs((fmax - fmin) / float(self.binwidth))) + 1
-        # Generate histogram counts
+        xdata = self.data[self.column]  # Series
 
         if freq == 1:
             ftype = ftype + '_density'
-            n, bin_edges = np.histogram(xdata, bins='auto',density=True)
-        elif freq == 2:
-            ftype = ftype + '_cumulative'
+            n, bin_edges = np.histogram(xdata, density=True)
+            if self.showplots:
+                xdata.plot.density()
         else:
-            n, bin_edges = np.histogram(xdata, bins='auto')
-        self.histdata = pd.DataFrame({'bins': bin_edges[1:], self.column: n})
+            n, bin_edges = np.histogram(xdata, density=False)
+            if self.showplots:
+                xdata.plot.hist()
+        # histogram data
+        histdata = pd.DataFrame({'bins': bin_edges[0:-1], self.column: n})
 
-
-        outputfile = join(self.outputdir, self.histogramid + ftype +".csv")
-        outputplot = join(self.outputdir, self.histogramid + ftype +".html")
-        self.histdata.to_csv(outputfile, index=False)
+        # filenames
+        outputfile = join(self.outputdir, self.histogramid + ftype + ".csv")
+        # outputplot = join(self.outputdir, self.histogramid + ftype +".html")
+        histdata.to_csv(outputfile, index=False)
         print("Saved histogram data to ", outputfile)
-        # Generate Plot
-        offline.plot({
-            "data": [go.Histogram(x=xdata, xbins=dict(start=int(fmin), end=int(fmax), size=self.binwidth))],
-            "layout": go.Layout(title=self.histogramid + " : " + self.histo_types()[freq])
-        }, filename=outputplot)
-        print("Saved histogram to ", outputplot)
+        return histdata
 
 
-############### MAIN ############################
-if __name__ == "__main__":
+def create_parser():
     import sys
 
     parser = argparse.ArgumentParser(prog=sys.argv[0],
                                      description='''\
-            Generates frequency histogram from datafile to output directory
+                Generates frequency histogram from datafile to output directory
 
-             ''')
-    parser.add_argument('--datafile', action='store', help='Initial data file', default="..\\..\\sampledata\\Brain11_Image_FILTERED.csv")
-    parser.add_argument('--outputdir', action='store', help='Output directory (must exist)', default="..\\..\\sampledata")
+                 ''')
+    parser.add_argument('--datafile', action='store', help='Initial data file',
+                        default="..\\..\\sampledata\\Brain11_Image_FILTERED.csv")
+    parser.add_argument('--outputdir', action='store', help='Output directory (must exist)',
+                        default="..\\..\\sampledata")
     parser.add_argument('--column', action='store', help='Column header to be analysed',
                         default="Count_ColocalizedGAD_DAPI_Objects")
-    parser.add_argument('--binwidth', action='store', help='Binwidth for relative frequency', default='5')
-    parser.add_argument('--showplots', action='store_true',help='Display popup plots', default=True)
+    parser.add_argument('--binwidth', action='store', help='Binwidth for relative frequency', default='1')
+    parser.add_argument('--showplots', action='store_true', help='Display popup plots', default=True)
+
+    return parser
+
+
+############### MAIN ############################
+if __name__ == "__main__":
+    parser = create_parser()
     args = parser.parse_args()
-
-
     print("Input:", args.datafile)
     print("Output:", args.outputdir)
     try:
-        fd = AutoHistogram(args.datafile, args.outputdir,args.column, args.binwidth, args.showplots)
+        fd = AutoHistogram(args.datafile, args.outputdir, args.column, args.binwidth, args.showplots)
         histo_types = fd.histo_types()
         for t in histo_types.keys():
             print(histo_types[t])
