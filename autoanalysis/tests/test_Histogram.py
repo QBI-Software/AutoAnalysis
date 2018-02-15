@@ -20,7 +20,7 @@ class TestHistogram(unittest.TestCase):
 
     def test_histotypes(self):
         data = self.fd.histo_types()
-        expected = {0: 'Relative freq', 1: 'Density', 2: 'Cumulative freq'}
+        expected = {0: 'Relative freq', 1: 'Density'} #, 2: 'Cumulative freq'}
         self.assertDictEqual(expected,data)
 
     def test_histogram(self):
@@ -33,7 +33,7 @@ class TestHistogram(unittest.TestCase):
         data = self.fd.generateHistogram(freq=type)
         self.assertGreater(len(data),0)
 
-    def test_histogram_cumulative(self):
-        type = 2 #'Cumulative'
-        data = self.fd.generateHistogram(freq=type)
-        self.assertGreater(len(data),0)
+    # def test_histogram_cumulative(self):
+    #     type = 2 #'Cumulative'
+    #     data = self.fd.generateHistogram(freq=type)
+    #     self.assertGreater(len(data),0)

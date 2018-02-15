@@ -38,36 +38,10 @@ class AutoHistogram(AutoData):
         self.histogramid = "%s_%s" % (self.bname, self.column)
 
     def histo_types(self):
-        types = {0: 'Relative freq', 1: 'Density', 2: 'Cumulative freq'}
+        types = {0: 'Relative freq', 1: 'Density'} #, 2: 'Cumulative freq'}
         return types
 
-    # def getStats(self, bimodal=True):
-    #     """
-    #     Get stats from histogram column
-    #     :param mean: get mean if true or median if false
-    #     :return: mean and variance
-    #     """
-    #     mean = None
-    #     variance = None
-    #     if not self.data.empty:
-    #         ndata = self.data[self.column]
-    #         if not bimodal:
-    #             mean = np.mean(ndata)
-    #             variance = np.var(ndata)
-    #             print("Mean:", mean)
-    #         else:
-    #             # two sets
-    #             mean = np.median(self.data[self.column])
-    #             print("Median:", mean)
-    #         variance = np.var(self.data[self.column])
-    #         print("Variance:", variance)
-    #     return (mean, variance)
-    #
-    # def gauss(self, x, mu, sigma, A):
-    #     return A * np.exp(-(x - mu) ** 2 / 2 / sigma ** 2)
-    #
-    # def bimodal(self, x, mu1, sigma1, A1, mu2, sigma2, A2):
-    #     return self.gauss(x, mu1, sigma1, A1) + self.gauss(x, mu2, sigma2, A2)
+
 
     def generateHistogram(self, freq=0):
         """
@@ -77,20 +51,26 @@ class AutoHistogram(AutoData):
         :return:
         """
         ftype = '_HISTOGRAM'
+        n_bins = 10
         # Data column
         xdata = self.data[self.column]  # Series
+        minv = int(min(xdata)/100) * n_bins
+        maxv = int(np.ceil(max(xdata) / n_bins)) * n_bins
 
+        bins = [x for x in range(minv,maxv,n_bins)]
         if freq == 1:
             ftype = ftype + '_density'
-            n, bin_edges = np.histogram(xdata, density=True)
+            n, bin_edges = np.histogram(xdata, bins=bins,density=True)
             if self.showplots:
                 xdata.plot.density()
         else:
-            n, bin_edges = np.histogram(xdata, density=False)
+            n, bin_edges = np.histogram(xdata, bins=bins,density=False)
             if self.showplots:
                 xdata.plot.hist()
         # histogram data
-        histdata = pd.DataFrame({'bins': bin_edges[0:-1], self.column: n})
+        histdata = pd.DataFrame()
+        histdata['bins']=bin_edges[0:-1]
+        histdata[self.column]= n
 
         # filenames
         outputfile = join(self.outputdir, self.histogramid + ftype + ".csv")
