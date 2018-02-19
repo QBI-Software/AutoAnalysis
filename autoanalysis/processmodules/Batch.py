@@ -1,16 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Batch Analysis script: batchStats - Auto Class
-Compiles histogram data from directories - expects input format:
+AutoBatch class
+1. Reads in list of files from INPUTDIR
+2. Matches files in list to searchtext (filenames)
+3. Combines data from columns into single batch file with unique ids generated from files
+4. Outputs to output directory as BATCH_filename_searchtext.csv or excel
 
-STIM OR NOSTIM                                      <-- USE THIS AS INPUT DIRECTORY
- | -- cell1                                         <-- uses this name as cell ID
-        | -- celldata
-                 | -- Histogram_log10D.csv files    <-- this name must match (generated from histogramLogD)
-
-and compiles to top level as <prefix>_AllHistogram_log10D.csv where prefix can be STIM, NOSTIM (example) in outputdir
-
-Created on Sep 8 2017
+Created on 19 Feb 2018
 
 @author: Liz Cooper-Williams, QBI
 """
@@ -19,91 +15,51 @@ import logging
 import re
 from glob import iglob
 from os import R_OK, access
-from os.path import join, isdir, commonpath, sep
+from os.path import join, isdir, commonpath, sep, basename, splitext
 
 from configobj import ConfigObj
 from numpy import unique
-
+import argparse
+import pandas as pd
+from plotly import offline
+from plotly.graph_objs import Layout, Scatter
+DEBUG = 1
 
 class AutoBatch:
-    def __init__(self, inputfiles, outputdir, prefix, expt, configfile=None, nolistfilter=False):
-        self.encoding = 'ISO-8859-1'
-        self.__loadConfig(configfile)
-        if self.config is not None and self.datafield is not None:
-            self.datafile = self.config[self.datafield]
-        else:
-            raise ValueError("Cannot determine which files to compile - check config Datafile option")
-        self.searchtext = expt + prefix
-        self.expt = expt
-        self.prefix = prefix
-        (self.base, self.inputfiles) = self.getSelectedFiles(inputfiles, self.datafile, expt, prefix, nofilter=nolistfilter)
+    def __init__(self, inputfiles, outputdir, datafile_searchtext,column_names, showplots=False):
+        (self.base, self.inputfiles) = self.getSelectedFiles(inputfiles, datafile_searchtext)
         self.numcells = len(self.inputfiles)
         self.outputdir = outputdir
+        self.outputfilename= join(self.outputdir,"BATCH_" + self.base.split(sep)[-1] + "_"+ datafile_searchtext.split('.')[0] +".csv")
+        self.colnames = column_names.split(',')
+        self.showplots = showplots
         self.n = 1  # generating id
 
-    def __loadConfig(self, configfile=None):
-        try:
-            if configfile is not None and access(configfile, R_OK):
-                config = ConfigObj(configfile, encoding=self.encoding)
-                self.config = config
-                logging.info("Batch: Config file loaded")
-            else:
-                self.config = None
-                logging.warning("Batch: NO Config file loaded")
 
-        except:
-            raise IOError("Batch: Cannot load Config file")
-
-    def deduplicate(self, itemlist):
+    def getSelectedFiles(self, inputdir, searchtext):
         """
-        Checks for duplicated column names and appends a number
-        :param itemlist:
-        :return:
-        """
-        u, indices = unique(itemlist, return_index=True)
-        duplicates = [x for x in range(0, len(itemlist)) if x not in indices]
-        i = 0
-        for d in duplicates:
-            itemlist[d] = itemlist[d] + "_" + str(i)
-            i = i + 1
-
-        return itemlist
-
-    def getSelectedFiles(self, inputdir, datafile, expt, prefix, nofilter=False):
-        """
-        Check list or directory matches searchtext(expt) and prefix(group) and contains only datafiles
+        Check list or directory contains only datafiles
         tries several methods for detecting files
         :param inputdir: list of files or input directory
-        :param datafile: matching datafile name
-        :param expt: searchstring in filename/filepath
-        :param prefix: comparison group - also needs to appear in filepath or filename
-        :param nofilter: assume provided list is correct - no further matching
+        :param searchtext: matching datafile name
         :return: basename and file list
         """
         files = []
         base = ''
-        searchtext = expt + prefix
         # get list of files from a directory
         if not isinstance(inputdir, list) and isdir(inputdir):
             base = inputdir
             if access(inputdir, R_OK):
-                allfiles = [y for y in iglob(join(inputdir, '**', datafile), recursive=True)]
+                allfiles = [y for y in iglob(join(inputdir, '**'), recursive=True)]
                 if len(allfiles) > 0:
-                    # Filter on searchtext - single word in directory path
-                    files = [f for f in allfiles if re.search(searchtext, f, flags=re.IGNORECASE)]
+                    # Filter on searchtext - match on filename
+                    files = [f for f in allfiles if (searchtext in basename(f))]
                     if len(files) <= 0:
-                        # try separate expt and prefix - case insensitive on windows but ?mac
-                        allfiles = [y for y in iglob(join(base, '**', prefix, '**', datafile), recursive=True)]
-                        files = [f for f in allfiles if re.search(expt, f, flags=re.IGNORECASE)]
-                    if len(files) <= 0:
-                        # try uppercase directory name
-                        files = [f for f in allfiles if prefix.upper() in f.upper().split(sep)]
-                    if len(files) <= 0:
-                        msg = "Batch: No match in path for both expt + prefix: %s %s" % (expt, prefix)
+                        msg = "Batch: No files found in inputdir for datafile searchtext: %s %s" % (inputdir,searchtext)
                         logging.error(msg)
                         raise ValueError(msg)
                 else:
-                    msg = "Batch: No files found in input"
+                    msg = "Batch: No files found in inputdir: %s" % inputdir
                     logging.error(msg)
                     raise IOError(msg)
 
@@ -115,31 +71,135 @@ class AutoBatch:
                 allfiles = unique(inputdir).tolist()
             else:
                 allfiles = unique(inputdir.tolist()).tolist()
-            if not nofilter:
-                files = [f for f in allfiles if re.search(searchtext, f, flags=re.IGNORECASE)]
-                if len(files) <= 0:
-                    files = [f for f in allfiles if prefix.upper() in f.upper().split(sep)]
-                else:
-                    files = allfiles #default assume prefix and expt strings are not found
-            else:
-                files = allfiles
+            files = [f for f in allfiles if (searchtext in basename(f))]
             base = commonpath(files)
         print("Total Files Found: ", len(files))
+        #generate IDs for each file (based on filename or unique)
+        filedict = {}
+        basenames = [basename(f) for f in files]
+        uids = unique(basenames)
+        usefilenames = (len(uids)==len(files))
+        for f in files:
+            filedict[self.generateID(f, usefilenames)]= f
 
-        return (base, files)
+        return (base, filedict)
 
-    def generateID(self, f):
+    def generateID(self, f,usefilenames=True):
+        """
+        Generate a unique ID for each file
+        :param f: full path filename
+        :param usefilenames: use base of filename
+        :return: unique ID
+        """
         # Generate unique cell ID
-        cells = f.split(sep)
-        base = self.base.split(sep)
-        num = 3
-        if 'CELLID' in self.config:
-            num = int(self.config['CELLID'])
-        if len(cells) > (len(base) + num + 1):
-            cell = "_".join(cells[len(base):len(base) + num])
+        (filename,ext) = splitext(basename(f))
+
+        if usefilenames:
+            cell = filename
         else:
-            cellid = 'c{0:03d}'.format(self.n)
-            cell = "_".join([self.searchtext, cellid])
+            cell = 'c{0:03d}'.format(self.n)
             self.n += 1
-        print("base=", self.base, " cellid=", cell)
+        if DEBUG:
+            print("Cellid=", cell)
         return cell
+
+    def validHeader(self,colname,df):
+        """
+        Check column names are in data files
+        :param colname: array of colname/s
+        :param df: data file as dataframe
+        :return: true if present, false if not (all columns)
+        """
+        matches = []
+        for col in colname:
+            matches.append(col in df.columns)
+        if sum(matches)== len(colname):
+            rtn = True
+        else:
+            rtn = False
+        return rtn
+
+    def generatePlots(self,df):
+        if len(df)==1:
+            df.plot()
+        else:
+            xi = [str(x) for x in range(len(df) + 1)]
+            data = []
+            title = 'Batch plots'
+            for col in df.columns:
+                data.append(Scatter(y=df[col], x=xi,name=col,mode='markers'))
+
+            # Create plotly plot
+            pfilename = self.outputfilename.replace('.csv','.html')
+            offline.plot({"data": data,
+                          "layout": Layout(title=title,
+                                           xaxis={'title': self.colnames},
+                                           yaxis={'title': ''})},
+                         filename=pfilename)
+
+        return pfilename
+
+
+    def combineData(self,colname=None):
+        """
+        Combine data from columns specified into batch output file
+        Include basic plot if showplots is flagged
+        :param colname:
+        :return: outputfilename
+        """
+        df = None
+        if colname is None:
+            colname = self.colnames
+            if colname is None or len(colname) <=0:
+                raise ValueError('No columns specified for data extraction')
+        batchout = {}
+        for fid,f in self.inputfiles.items():
+            if basename(f).endswith('.csv'):
+                df = pd.read_csv(f)
+                if self.validHeader(colname, df):
+                    data = [x[0] for x in df[colname].get_values()]
+                    batchout[fid] = data
+        if len(batchout) > 0:
+            df = pd.DataFrame.from_dict(batchout,orient='index').T.fillna('')
+            #save to file
+            df.to_csv(self.outputfilename,index=False)
+            if self.showplots:
+                self.generatePlots(df)
+        return df
+
+################################################################################
+def create_parser():
+    import sys
+
+    parser = argparse.ArgumentParser(prog=sys.argv[0],
+                                     description='''\
+                Combines data from datafiles to output file
+
+                 ''')
+    parser.add_argument('--datafile', action='store', help='Search text of filename',
+                        default="_Image.csv")
+    parser.add_argument('--outputdir', action='store', help='Output directory (must exist)',default="..\\..\\dataoutput")
+    parser.add_argument('--inputdir', action='store', help='Input directory',
+                        default="..\\..\\sampledata")
+    parser.add_argument('--column', action='store', help='Column header/s to be combined',
+                        default="Count_ColocalizedGAD_DAPI_Objects")
+    parser.add_argument('--showplots', action='store_true', help='Display popup plots', default=True)
+
+    return parser
+
+###############################################################################
+if __name__ == '__main__':
+    parser = create_parser()
+    args = parser.parse_args()
+    datafile = args.datafile
+    outputdir = args.outputdir
+    column_name = args.column
+    inputdir = args.inputdir
+    showplots = True
+    batch = AutoBatch(inputdir, outputdir, datafile, column_name, showplots)
+    for f in batch.inputfiles:
+        print("File:",f)
+        #print("ID:", batch.generateID(f))
+    #Generate output file
+    df_out = batch.combineData()
+    print("Output: ", batch.outputfilename, " data=", len(df_out))
