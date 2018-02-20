@@ -368,15 +368,15 @@ class ProcessRunPanel(ProcessPanel):
 
     def loadController(self):
         self.controller = self.Parent.controller
-        processes = [p['caption'] for p in self.controller.processes]
+        processes = [self.controller.processes[p]['caption'] for p in self.controller.processes]
         self.m_checkListProcess.Clear()
         self.m_checkListProcess.AppendItems(processes)
 
     def OnShowDescription(self, event):
         print(event.String)
-        desc = [p['description'] for p in self.controller.processes if p['caption'] == event.String]
-        filesIn = [p['files'] for p in self.controller.processes if p['caption'] == event.String]
-        filesOut = [p['filesout'] for p in self.controller.processes if p['caption'] == event.String]
+        desc = [self.controller.processes[p]['description'] for p in self.controller.processes if self.controller.processes[p]['caption'] == event.String]
+        filesIn = [self.controller.processes[p]['files'] for p in self.controller.processes if self.controller.processes[p]['caption'] == event.String]
+        filesOut = [self.controller.processes[p]['filesout'] for p in self.controller.processes if self.controller.processes[p]['caption'] == event.String]
         # Load from Config
         filesIn = [self.controller.config[f] for f in filesIn[0].split(", ")]
         filesOut = [self.controller.config[f] for f in filesOut[0].split(", ")]
