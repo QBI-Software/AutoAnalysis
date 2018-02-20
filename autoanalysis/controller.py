@@ -5,7 +5,7 @@ from logging.handlers import RotatingFileHandler
 from multiprocessing import freeze_support, Pool
 from os import access, R_OK, mkdir
 from os.path import join, dirname, exists, split, splitext, expanduser
-
+from autoanalysis.db.dbquery import DBI
 import matplotlib.pyplot as plt
 import wx
 import yaml
@@ -162,24 +162,32 @@ class ProcessThread(threading.Thread):
 ########################################################################
 
 class Controller():
-    def __init__(self, configfile, processfile):
-        self.processfile = processfile
-        pf = open(processfile,'rb')
-        self.processes = yaml.load(pf)
-        self.config = self.loadConfig(configfile)
+    def __init__(self, configfile, configID,processfile):
         self.logger = self.loadLogger()
-        self.cmodules={}
+        self.processfile = processfile
+        self.cmodules = self.loadProcesses()
+        # connect to db
+        self.db = DBI(configfile)
+        self.configID = configID #multiple configs possible
+        self.db.getconn()
 
     def loadProcesses(self):
-        for p in self.processes:
-            msg = "Controller:LoadProcessors: loading %s=%s" % (p, self.processes[p]['caption'])
-            print(msg)
-            logging.info(msg)
-            module_name = self.processes[p]['module']
-            class_name = self.processes[p]['class']
-            module = importlib.import_module(module_name)
-            class_ = getattr(module, class_name)
-            self.cmodules[p]= class_()
+        try:
+            pf = open(self.processfile, 'rb')
+            self.processes = yaml.load(pf)
+            cmodules={}
+            for p in self.processes:
+                msg = "Controller:LoadProcessors: loading %s=%s" % (p, self.processes[p]['caption'])
+                print(msg)
+                logging.info(msg)
+                module_name = self.processes[p]['module']
+                class_name = self.processes[p]['class']
+                module = importlib.import_module(module_name)
+                class_ = getattr(module, class_name)
+                cmodules[p]= class_()
+            return cmodules
+        except Exception as e:
+            raise e
 
     def loadLogger(self,outputdir=None, expt=''):
         #### LoggingConfig
@@ -248,7 +256,14 @@ class Controller():
         """
         type = self.processes[i]['href']
         processname = self.processes[i]['caption']
-        filesIn = [self.config[f] for f in self.processes[i]['files'].split(", ")]
+        filesIn = []
+        for f in self.processes[i]['files'].split(", "):
+            fin = self.db.getConfigByName(self.configID,f)
+            if fin is not None:
+                filesIn.append(fin)
+            else:
+                filesIn.append(f)
+
         logger.info("Running Threads - start: %s (Expt prefix: %s) [row: %d]", type, expt, row)
         wx.PostEvent(wxGui, ResultEvent((0, row, 0, len(filenames), processname)))
 
