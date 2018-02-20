@@ -44,7 +44,7 @@ class AutoData():
             if data.empty:
                 raise ValueError("Data not loaded - check datafile")
             else:
-                msg = "... loaded complete"
+                msg = "... load complete"
                 self.logandprint(msg)
         except Exception as e:
             print(e)

@@ -19,16 +19,16 @@ class DBI():
     def closeconn(self):
         self.conn.close()
 
-    def getConfig(self):
+    def getConfig(self, configid):
         """
         Get dict of config
         :return: name=value pairs or None
         """
         if self.c is None:
             self.getconn()
-        self.c.execute("SELECT * FROM config")
+        self.c.execute("SELECT * FROM config WHERE configid=?",(configid,))
         config = {}
-        for k,val in self.c.fetchall():
+        for k,val,gp in self.c.fetchall():
             config[k] = val
         if len(config)<=0:
             config = None
@@ -66,7 +66,7 @@ class DBI():
         """
         if self.c is None:
             self.getconn()
-        self.c.execute('SELECT value FROM config WHERE group=? AND name=?',(group,sid,))
+        self.c.execute('SELECT value FROM config WHERE configid=? AND name=?',(group,sid,))
         data = self.c.fetchone()
         if data is not None:
             cid = data[0]
@@ -82,7 +82,7 @@ class DBI():
         """
         if self.c is None:
             self.getconn()
-        self.c.execute('SELECT group,name FROM config WHERE value=?',(sid,))
+        self.c.execute('SELECT configid,name FROM config WHERE value=?',(sid,))
         qry = self.c.fetchall()
         data = [d[0] for d in qry]
         return data
@@ -94,12 +94,13 @@ if __name__ == "__main__":
     if access(configdb,R_OK):
         dbi = DBI(configdb)
         dbi.getconn()
-        config = dbi.getConfig()
+        configid='general'
+        config = dbi.getConfig(configid)
         for k,v in config.items():
             print(k,"=",v)
 
         test1 = 'BINWIDTH'
-        print("Getting value for ", test1, " is ", dbi.getConfigByName(test1))
+        print("Getting value for ", test1, " is ", dbi.getConfigByName(configid,test1))
 
         test2 = 11
         print("Getting value/s for ", test2, " is ", dbi.getConfigByValue(test2))

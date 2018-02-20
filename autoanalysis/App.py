@@ -18,8 +18,7 @@ from os.path import abspath,dirname
 import glob
 from autoanalysis.db.dbquery import DBI
 from configobj import ConfigObj
-from autoanalysis.Controller import EVT_RESULT, EVT_DATA
-from autoanalysis.Controller import Controller
+from autoanalysis.controller import EVT_RESULT, EVT_DATA,Controller
 from autoanalysis.gui.appgui import ConfigPanel, FilesPanel, ComparePanel, WelcomePanel, ProcessPanel
 __version__='0.0.0'
 
@@ -202,8 +201,10 @@ class FileSelectPanel(FilesPanel):
 
     def loadController(self):
         self.controller = self.Parent.controller
-        self.m_cbGroups.SetItems([self.Parent.prefixes[0], self.Parent.prefixes[1]])
-        self.datafile = self.controller.datafile
+        datagroups = self.controller.db.getConfigByName(self.controller.currentconfig,'DATAGROUPS')
+        if datagroups is not None:
+            self.m_cbGroups.SetItems(datagroups)
+        # self.datafile = self.controller.datafile
 
     def OnInputdir(self, e):
         """ Open a file"""
