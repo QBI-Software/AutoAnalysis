@@ -246,6 +246,7 @@ class Controller():
         self.db.getconn()
 
     def loadProcesses(self):
+        pf = None
         try:
             pf = open(self.processfile, 'rb')
             self.processes = yaml.load(pf)
@@ -261,7 +262,8 @@ class Controller():
         except Exception as e:
             raise e
         finally:
-            pf.close()
+            if pf is not None:
+                pf.close()
 
     def loadLogger(self,outputdir=None, expt=''):
         #### LoggingConfig
@@ -281,28 +283,28 @@ class Controller():
         return logger
 
     # ----------------------------------------------------------------------
-    def loadConfig(self, config=None):
-        """
-        Load from config file or config object
-        :param config:
-        :return:
-        """
-        try:
-            if config is not None and isinstance(config, ConfigObj):
-                logger.info("Loading config obj:%s", config.filename)
-            elif isinstance(config, str) and access(config, R_OK):
-                logger.info("Loading config from file:%s", config)
-                config = ConfigObj(config)
-            else:
-                logger.warning('No config file found')
-                config = ConfigObj()
-
-        except IOError as e:
-            logging.error(e)
-        except ValueError as e:
-            logging.error(e)
-
-        return config
+    # def loadConfig(self, config=None):
+    #     """
+    #     Load from config file or config object
+    #     :param config:
+    #     :return:
+    #     """
+    #     try:
+    #         if config is not None and isinstance(config, ConfigObj):
+    #             logger.info("Loading config obj:%s", config.filename)
+    #         elif isinstance(config, str) and access(config, R_OK):
+    #             logger.info("Loading config from file:%s", config)
+    #             config = ConfigObj(config)
+    #         else:
+    #             logger.warning('No config file found')
+    #             config = ConfigObj()
+    #
+    #     except IOError as e:
+    #         logging.error(e)
+    #     except ValueError as e:
+    #         logging.error(e)
+    #
+    #     return config
 
     # ----------------------------------------------------------------------
     def RunCompare(self, wxGui, indirs, outputdir, prefixes, searchtext):

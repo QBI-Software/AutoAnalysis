@@ -34,17 +34,20 @@ class DBI():
             config = None
         return config
 
-    def deleteConfig(self):
+    def deleteConfig(self,configid=None):
         """
         Delete all IDs in table
         :return:
         """
         if self.c is None:
             self.getconn()
-        cnt = self.c.execute("DELETE FROM config").rowcount
+        if configid is None:
+            cnt = self.c.execute("DELETE FROM config").rowcount
+        else:
+            cnt = self.c.execute("DELETE FROM config WHERE configid=?", (configid,)).rowcount
         return cnt
 
-    def addConfig(self,idlist):
+    def addConfig(self,configid,idlist):
         """
         Save changes to Incorrect and Correct IDs - all are replaced
         :param idlist:
@@ -52,10 +55,12 @@ class DBI():
         """
         if self.c is None:
             self.getconn()
-        self.deleteConfig()
+        cids = self.getConfigIds()
+        if configid in cids:
+            self.deleteConfig(configid)
         cnt = self.c.executemany('INSERT INTO config VALUES(?,?,?)', idlist).rowcount
         self.conn.commit()
-        self.conn.close()
+        #self.conn.close()
         return cnt
 
     def getConfigByName(self,group,sid):
@@ -74,7 +79,7 @@ class DBI():
             cid = None
         return cid
 
-    def getConfigByValue(self,sid):
+    def getConfigIds(self):
         """
         Get value/s if it exists in lookup table
         :param sid:
@@ -82,11 +87,10 @@ class DBI():
         """
         if self.c is None:
             self.getconn()
-        self.c.execute('SELECT configid,name FROM config WHERE value=?',(sid,))
+        self.c.execute('SELECT DISTINCT configid FROM config',)
         qry = self.c.fetchall()
         data = [d[0] for d in qry]
         return data
-
 
 #############################################################################
 if __name__ == "__main__":

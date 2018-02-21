@@ -9,7 +9,7 @@
 
 import wx
 import wx.xrc
-import wx.propgrid as pg
+import wx.grid
 import wx.dataview
 import wx.richtext
 
@@ -20,7 +20,7 @@ import wx.richtext
 class ConfigPanel ( wx.Panel ):
 	
 	def __init__( self, parent ):
-		wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, pos = wx.DefaultPosition, size = wx.Size( -1,-1 ), style = wx.TAB_TRAVERSAL )
+		wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, pos = wx.DefaultPosition, size = wx.Size( 662,790 ), style = wx.TAB_TRAVERSAL )
 		
 		bSizer17 = wx.BoxSizer( wx.VERTICAL )
 		
@@ -39,12 +39,47 @@ class ConfigPanel ( wx.Panel ):
 		
 		bSizer17.Add( self.m_status, 0, wx.ALL, 5 )
 		
-		self.m_propertyGridManager1 = pg.PropertyGridManager(self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.propgrid.PGMAN_DEFAULT_STYLE)
-		self.m_propertyGridManager1.SetExtraStyle( wx.propgrid.PG_EX_MODE_BUTTONS ) 
+		bSizer14 = wx.BoxSizer( wx.HORIZONTAL )
 		
-		self.m_propertyGridPage1 = self.m_propertyGridManager1.AddPage( u"Page", wx.NullBitmap );
-		self.m_propertyGridItem1 = self.m_propertyGridPage1.Append( pg.StringProperty( u"Name", u"Name" ) ) 
-		bSizer17.Add( self.m_propertyGridManager1, 0, wx.ALL|wx.EXPAND, 5 )
+		self.m_staticText24 = wx.StaticText( self, wx.ID_ANY, u"Configuration Set", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText24.Wrap( -1 )
+		bSizer14.Add( self.m_staticText24, 0, wx.ALL, 5 )
+		
+		cboConfigidChoices = [ u"general" ]
+		self.cboConfigid = wx.ComboBox( self, wx.ID_ANY, u"Create or select a config set", wx.DefaultPosition, wx.DefaultSize, cboConfigidChoices, wx.CB_DROPDOWN|wx.TE_PROCESS_ENTER )
+		self.cboConfigid.SetSelection( 0 )
+		bSizer14.Add( self.cboConfigid, 0, wx.ALL, 5 )
+		
+		
+		bSizer17.Add( bSizer14, 1, wx.ALL|wx.EXPAND, 5 )
+		
+		self.m_grid1 = wx.grid.Grid( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0 )
+		
+		# Grid
+		self.m_grid1.CreateGrid( 15, 2 )
+		self.m_grid1.EnableEditing( True )
+		self.m_grid1.EnableGridLines( True )
+		self.m_grid1.EnableDragGridSize( True )
+		self.m_grid1.SetMargins( 0, 0 )
+		
+		# Columns
+		self.m_grid1.EnableDragColMove( False )
+		self.m_grid1.EnableDragColSize( True )
+		self.m_grid1.SetColLabelSize( 50 )
+		self.m_grid1.SetColLabelValue( 0, u"Name" )
+		self.m_grid1.SetColLabelValue( 1, u"Value" )
+		self.m_grid1.SetColLabelAlignment( wx.ALIGN_CENTRE, wx.ALIGN_CENTRE )
+		
+		# Rows
+		self.m_grid1.EnableDragRowSize( True )
+		self.m_grid1.SetRowLabelSize( 80 )
+		self.m_grid1.SetRowLabelAlignment( wx.ALIGN_CENTRE, wx.ALIGN_CENTRE )
+		
+		# Label Appearance
+		
+		# Cell Defaults
+		self.m_grid1.SetDefaultCellAlignment( wx.ALIGN_LEFT, wx.ALIGN_TOP )
+		bSizer17.Add( self.m_grid1, 0, wx.ALIGN_TOP|wx.EXPAND, 5 )
 		
 		bSizer21 = wx.BoxSizer( wx.HORIZONTAL )
 		
@@ -55,37 +90,26 @@ class ConfigPanel ( wx.Panel ):
 		
 		bSizer21.Add( self.btnSave, 0, wx.ALL, 5 )
 		
-		self.btnSaveNew = wx.Button( self, wx.ID_ANY, u"Save As", wx.DefaultPosition, wx.DefaultSize, 0 )
-		bSizer21.Add( self.btnSaveNew, 0, wx.ALL, 5 )
 		
-		self.btnLoadConfig = wx.Button( self, wx.ID_ANY, u"Load From File", wx.DefaultPosition, wx.DefaultSize, 0 )
-		bSizer21.Add( self.btnLoadConfig, 0, wx.ALL, 5 )
-		
-		
-		bSizer17.Add( bSizer21, 1, wx.EXPAND, 5 )
+		bSizer17.Add( bSizer21, 1, wx.ALL, 5 )
 		
 		
 		self.SetSizer( bSizer17 )
 		self.Layout()
-		bSizer17.Fit( self )
 		
 		# Connect Events
+		self.cboConfigid.Bind( wx.EVT_COMBOBOX, self.OnLoadConfig )
 		self.btnSave.Bind( wx.EVT_BUTTON, self.OnSaveConfig )
-		self.btnSaveNew.Bind( wx.EVT_BUTTON, self.OnSaveNew )
-		self.btnLoadConfig.Bind( wx.EVT_BUTTON, self.OnLoadConfig )
 	
 	def __del__( self ):
 		pass
 	
 	
 	# Virtual event handlers, overide them in your derived class
-	def OnSaveConfig( self, event ):
-		event.Skip()
-	
-	def OnSaveNew( self, event ):
-		event.Skip()
-	
 	def OnLoadConfig( self, event ):
+		event.Skip()
+	
+	def OnSaveConfig( self, event ):
 		event.Skip()
 	
 

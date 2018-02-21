@@ -4,23 +4,25 @@ import csv
 import re
 import time
 from glob import iglob
-from os import access, R_OK
 from os.path import join, expanduser, isdir, sep
-#maintain this order of matplotlib
+from autoanalysis.db.dbquery import DBI
+# maintain this order of matplotlib
 # TkAgg causes Runtime errors in Thread
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 plt.style.use('seaborn-paper')
 import wx
 import wx.html2
-from os.path import abspath,dirname
+from os.path import abspath, dirname
 import glob
-from autoanalysis.db.dbquery import DBI
 from configobj import ConfigObj
-from autoanalysis.controller import EVT_RESULT, EVT_DATA,Controller
-from autoanalysis.gui.appgui import ConfigPanel, FilesPanel, ComparePanel, WelcomePanel, ProcessPanel
-__version__='0.0.0'
+from autoanalysis.controller import EVT_RESULT, Controller
+from autoanalysis.gui.appgui import ConfigPanel, FilesPanel, WelcomePanel, ProcessPanel
+
+__version__ = '0.0.0'
 
 
 ##### Global functions
@@ -34,6 +36,7 @@ def findResourceDir():
         ctr += 1
     return abspath(resource_dir[0])
 
+
 ########################################################################
 class HomePanel(WelcomePanel):
     """
@@ -43,11 +46,11 @@ class HomePanel(WelcomePanel):
     # ----------------------------------------------------------------------
     def __init__(self, parent):
         super(HomePanel, self).__init__(parent)
-        img = wx.EmptyBitmap(1, 1)
-        img.LoadFile(join('resources', 'MSDPlots.bmp'), wx.BITMAP_TYPE_BMP)
+        img = wx.Bitmap(1, 1)
+        img.LoadFile(join(findResourceDir(), 'app_design.bmp'), wx.BITMAP_TYPE_BMP)
 
         self.m_richText1.BeginFontSize(14)
-        welcome = "Welcome to the Automated Analysis App (v.%s)"% __version__
+        welcome = "Welcome to the Automated Analysis App (v.%s)" % __version__
         self.m_richText1.WriteText(welcome)
         self.m_richText1.EndFontSize()
         self.m_richText1.Newline()
@@ -109,60 +112,96 @@ class Config(ConfigPanel):
     def __init__(self, parent):
         super(Config, self).__init__(parent)
         self.parent = parent
-        self.currentconfig= join(expanduser('~'), '.msdcfg')
+        self.configdb = join(self.parent.resourcesdir, 'autoconfig.db')
+        self.dbi = DBI(self.configdb)
         self.loadController()
-
 
     def loadController(self):
         self.controller = self.parent.controller
+        self.currentconfig = self.parent.controller.currentconfig
+        self.OnLoadData()
 
+    def OnLoadData(self):
+        self.dbi.getconn()
+        #load config values
+        cids = self.dbi.getConfigIds()
+        if len(cids)>0:
+            self.cboConfigid.Set(cids)
+            #configid = self.cboConfigid.GetStringSelection()
+            rownum =0
+            if self.currentconfig in cids:
+                selection = self.cboConfigid.FindString(self.currentconfig)
+                self.cboConfigid.SetSelection(selection)
+                conf = self.dbi.getConfig(self.currentconfig)
+            else:
+                selection = self.cboConfigid.FindString(cids[0])
+                self.cboConfigid.SetSelection(selection)
+                conf = self.dbi.getConfig(cids[0])
+            if conf is not None:
+                for k in conf.keys():
+                    self.m_grid1.SetCellValue(rownum, 0, k)
+                    self.m_grid1.SetCellValue(rownum, 1, conf[k])
+                    rownum += 1
+                self.m_grid1.AutoSizeColumns()
+                self.m_grid1.AutoSize()
+        self.dbi.closeconn()
 
-    def OnSaveConfig(self, event, configfile=None):
-        config = ConfigObj()
-        if configfile is not None:
-            config.filename = configfile
-        else:
-            config.filename = self.currentconfig
-
-        config.write()
-        # Reload to parent
+    def OnLoadConfig(self,event):
+        self.dbi.getconn()
+        #load config values
+        configid = self.cboConfigid.GetValue()
         try:
-            loadedcfg = self.parent.controller.loadConfig(config)
-            if loadedcfg is not None:
-                for fp in self.parent.Children:
-                    if isinstance(fp, wx.Panel):
-                        fp.loadController()
-            msg = "Config file saved: %s" % config.filename
-            print(msg)
-            self.m_status.SetLabel(msg)
-        except IOError as e:
-            self.parent.Warn("Config error:" + e.args[0])
+            rownum =0
+            conf = self.dbi.getConfig(configid)
+            if conf is not None:
+                self.m_grid1.ClearGrid()
+                for k in conf.keys():
+                    self.m_grid1.SetCellValue(rownum, 0, k)
+                    self.m_grid1.SetCellValue(rownum, 1, conf[k])
+                    rownum += 1
+                self.m_grid1.AutoSizeColumns()
+                self.m_grid1.AutoSize()
+            #Notify other controllers
+            self.parent.controller.currentconfig = configid
+            # reload other panels
+            for fp in self.parent.Children:
+                if isinstance(fp, wx.Panel) and self.__class__ != fp.__class__:
+                    fp.loadController()
+            # notification
+            msg = "Config loaded: %s" % configid
+            self.Parent.Warn(msg)
+        except Exception as e:
+            self.Parent.Warn(e.args[0])
+        finally:
+            self.dbi.closeconn()
 
-    def OnSaveNew(self, event):
-        openFileDialog = wx.FileDialog(self, "Save config file", "", "", "Config files (*.cfg)|*",
-                                       wx.FD_SAVE | wx.FD_CHANGE_DIR)
-        openFileDialog.SetDirectory(expanduser('~'))
-        if openFileDialog.ShowModal() == wx.ID_OK:
-            configfile = str(openFileDialog.GetPath())
-            self.currentconfig = configfile
-            self.OnSaveConfig(event, configfile)
 
-    def OnLoadConfig(self, event):
-        print("Load From Config dialog")
-        openFileDialog = wx.FileDialog(self, "Open config file", "", "", "Config files (*.cfg)|*",
-                                       wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_CHANGE_DIR)
-        #openFileDialog.SetDirectory(expanduser('~'))
-        if openFileDialog.ShowModal() == wx.ID_OK:
-            configfile = str(openFileDialog.GetPath())
-            try:
-                config = ConfigObj(configfile)
-                self.parent.controller.loadConfig(config)
-                self.currentconfig=configfile
-                self.__loadValues(self.Parent.controller)
-                self.m_status.SetLabel("Config file: %s" % configfile)
-            except IOError as e:
-                self.Parent.Warn("Config error:" + e.args[0])
-        openFileDialog.Destroy()
+    def OnSaveConfig(self, event):
+        self.dbi.getconn()
+        configid = self.cboConfigid.GetValue()
+        configlist=[]
+        data = self.m_grid1.GetTable()
+        for rownum in range(0, data.GetRowsCount()):
+            if not data.IsEmptyCell(rownum, 0):
+                configlist.append((self.m_grid1.GetCellValue(rownum, 0),self.m_grid1.GetCellValue(rownum, 1),configid))
+        #print('Saved config:', configlist)
+        # Save to DB
+        cnt = self.dbi.addConfig(configid,configlist)
+        # Load as options
+        cids = self.dbi.getConfigIds()
+        if len(cids) > 0:
+            self.cboConfigid.Set(cids)
+        # Load controller
+        self.parent.controller.currentconfig = configid
+        #reload other panels
+        for fp in self.parent.Children:
+            if isinstance(fp, wx.Panel) and self.__class__ != fp.__class__:
+                fp.loadController()
+        #notification
+        msg = "Config saved: %s" % configid
+        self.Parent.Warn(msg)
+        self.dbi.closeconn()
+
 
 
 ########################################################################
@@ -189,22 +228,23 @@ class FileSelectPanel(FilesPanel):
         self.loadController()
         self.filedrop = MyFileDropTarget(self.m_dataViewListCtrl1)
         self.m_tcDragdrop.SetDropTarget(self.filedrop)
-        #self.col_file.SetSortable(True)
-        #self.col_group.SetSortable(True)
-
+        # self.col_file.SetSortable(True)
+        # self.col_group.SetSortable(True)
 
     def OnColClick(self, event):
         print("header clicked: ", event.GetColumn())
         # colidx = event.GetColumn()
         # self.m_dataViewListCtrl1.GetModel().Resort()
 
-
     def loadController(self):
         self.controller = self.Parent.controller
-        datagroups = self.controller.db.getConfigByName(self.controller.currentconfig,'DATAGROUPS')
-        if datagroups is not None:
-            self.m_cbGroups.SetItems(datagroups)
-        # self.datafile = self.controller.datafile
+        datagroups = []
+        config = self.controller.db.getConfig(self.controller.currentconfig)
+        for c in config.keys():
+            if c.startswith('GROUP'):
+                datagroups.append(config[c])
+        self.m_cbGroups.SetItems(datagroups)
+
 
     def OnInputdir(self, e):
         """ Open a file"""
@@ -300,7 +340,7 @@ class FileSelectPanel(FilesPanel):
         fullsearch = self.m_cbMatchAny.GetValue()
         self.m_status.SetLabelText("Finding files ... please wait")
         if fullsearch:
-            allfiles = [y for y in iglob(join(self.inputdir, '**', '*'+self.datafile), recursive=True)]
+            allfiles = [y for y in iglob(join(self.inputdir, '**', '*' + self.datafile), recursive=True)]
         else:
             allfiles = [y for y in iglob(join(self.inputdir, '**', self.datafile), recursive=True)]
         searchtext = self.m_tcSearch.GetValue()
@@ -374,9 +414,12 @@ class ProcessRunPanel(ProcessPanel):
 
     def OnShowDescription(self, event):
         print(event.String)
-        desc = [self.controller.processes[p]['description'] for p in self.controller.processes if self.controller.processes[p]['caption'] == event.String]
-        filesIn = [self.controller.processes[p]['files'] for p in self.controller.processes if self.controller.processes[p]['caption'] == event.String]
-        filesOut = [self.controller.processes[p]['filesout'] for p in self.controller.processes if self.controller.processes[p]['caption'] == event.String]
+        desc = [self.controller.processes[p]['description'] for p in self.controller.processes if
+                self.controller.processes[p]['caption'] == event.String]
+        filesIn = [self.controller.processes[p]['files'] for p in self.controller.processes if
+                   self.controller.processes[p]['caption'] == event.String]
+        filesOut = [self.controller.processes[p]['filesout'] for p in self.controller.processes if
+                    self.controller.processes[p]['caption'] == event.String]
         # Load from Config
         filesIn = [self.controller.config[f] for f in filesIn[0].split(", ")]
         filesOut = [self.controller.config[f] for f in filesOut[0].split(", ")]
@@ -492,7 +535,9 @@ class ProcessRunPanel(ProcessPanel):
                 row = 0
                 # For each process
                 for p in selections:
-                    i = [i for i in range(len(self.controller.processes)) if p == self.controller.processes[i]['caption']][0]
+                    i = \
+                    [i for i in range(len(self.controller.processes)) if p == self.controller.processes[i]['caption']][
+                        0]
                     if self.controller.processes[i]['ptype'] == 'indiv':
                         self.controller.RunProcess(self, filenames['all'], i, outputdir, expt, row)
                     else:
@@ -512,119 +557,6 @@ class ProcessRunPanel(ProcessPanel):
 
 
 ########################################################################
-class CompareRunPanel(ComparePanel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.loadDefaults()
-        self.loadController()
-        self.controller = parent.controller
-        EVT_DATA(self, self.updateResults)
-
-    def loadController(self):
-        self.controller = self.Parent.controller
-
-    def OnLoadDefaults(self, event):
-        """
-        callback
-        :param event:
-        :return:
-        """
-        self.loadDefaults()
-
-    def loadDefaults(self):
-        """
-        Initialise group fields from config and file panels
-        :return:
-        """
-        fpanel = self.getFilePanel()
-        if fpanel is not None:
-            prefix = fpanel.m_tcSearch.GetValue()
-            self.m_tcGp1Files.SetValue(fpanel.txtOutputdir.GetValue())
-            self.m_tcGp2Files.SetValue(fpanel.txtOutputdir.GetValue())
-        else:
-            prefix = ''
-        cpanel = self.getConfigPanel()
-
-
-    def updateResults(self, msg):
-        (df) = msg.data
-        print("\nProgress updated: ", time.ctime())
-        print('data = ', df)
-        cols = df.columns.tolist()
-        self.m_tcResults.AppendText("Independent paired T-Test results\n***********\n")
-        for i, row in df.iterrows():
-            for col in cols:
-                msg = "%s: %s\n" % (col, str(row[col]))
-                print(msg)
-                self.m_tcResults.AppendText(msg)
-            self.m_tcResults.AppendText("\n***********\n")
-
-    def OnBrowseGp1(self, event):
-        """ Open a file"""
-        dlg = wx.DirDialog(self, "Choose a directory containing data files")
-        if dlg.ShowModal() == wx.ID_OK:
-            # self.inputdir1 = str(dlg.GetPath())
-            self.m_tcGp1Files.SetValue(str(dlg.GetPath()))
-        dlg.Destroy()
-
-    def OnBrowseGp2(self, event):
-        """ Open a file"""
-        dlg = wx.DirDialog(self, "Choose a directory containing data files")
-        if dlg.ShowModal() == wx.ID_OK:
-            # self.inputdir2 = str(dlg.GetPath())
-            self.m_tcGp2Files.SetValue(str(dlg.GetPath()))
-        dlg.Destroy()
-
-    def OnCompareRun(self, event):
-        inputdirs = [self.m_tcGp1Files.GetValue(), self.m_tcGp2Files.GetValue()]
-        prefixes = [self.m_tcGp1.GetValue(), self.m_tcGp2.GetValue()]
-        try:
-            for d in inputdirs:
-                if not isdir(d) or not access(d, R_OK):
-                    raise ValueError("Please select directories containing files for comparison")
-            if prefixes[0] == prefixes[1]:
-                raise ValueError("Groups are the same")
-            if len(prefixes[0]) <= 0 or len(prefixes[1]) <= 0:
-                raise ValueError("Two groups are required - matching the prefixes of compiled files")
-            outputdir = self.getFilePanel().txtOutputdir.GetValue()
-            searchtext = self.getFilePanel().m_tcSearch.GetValue()
-
-            self.controller.RunCompare(self, inputdirs, outputdir, prefixes, searchtext)
-        except ValueError as e:
-            self.Parent.Warn(e.args[0])
-
-    def OnCompareStop(self, event):
-        print('Stopping process')
-
-    def getFilePanel(self):
-        """
-        Get access to filepanel
-        :return:
-        """
-        filepanel = None
-
-        for fp in self.Parent.Children:
-            if isinstance(fp, FileSelectPanel):
-                filepanel = fp
-                break
-        return filepanel
-
-    def getConfigPanel(self):
-        """
-        Get access to filepanel
-        :return:
-        """
-        filepanel = None
-
-        for fp in self.Parent.Children:
-            if isinstance(fp, Config):
-                filepanel = fp
-                break
-        return filepanel
-
-
-
-########################################################################
 class AppMain(wx.Listbook):
     def __init__(self, parent):
         """Constructor"""
@@ -634,7 +566,7 @@ class AppMain(wx.Listbook):
         self.configfile = join(self.resourcesdir, 'autoconfig.db')
 
         self.currentconfig = 'general'
-        self.controller = Controller(self.configfile, self.currentconfig,self.processfile)
+        self.controller = Controller(self.configfile, self.currentconfig, self.processfile)
 
         self.InitUI()
         self.Centre(wx.BOTH)
@@ -659,8 +591,7 @@ class AppMain(wx.Listbook):
         pages = [(HomePanel(self), "Welcome"),
                  (Config(self), "Configure"),
                  (FileSelectPanel(self), "Select Files"),
-                 (ProcessRunPanel(self), "Run Processes"),
-                 (CompareRunPanel(self), "Compare Groups")]
+                 (ProcessRunPanel(self), "Run Processes")]
         imID = 0
         for page, label in pages:
             # self.AddPage(page, label, imageId=imID)
@@ -696,8 +627,8 @@ class AppMain(wx.Listbook):
         dlg.Destroy()
 
     def OnQuit(self, e):
-        if self.dbi is not None:
-            self.dbi.conn.close()
+        if self.controller.db is not None:
+            self.controller.db.conn.close()
         self.Close()
 
     def OnCloseWindow(self, e):
