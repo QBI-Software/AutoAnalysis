@@ -20,37 +20,63 @@ from os.path import join
 # plt.style.use('seaborn-paper')
 import numpy as np
 import pandas as pd
+from collections import OrderedDict
 
 from autoanalysis.processmodules.DataParser import AutoData
 
 
 class AutoHistogram(AutoData):
-    def __init__(self, datafile, outputdir, column_name, binwidth, sheet=0, skiprows=0, headers=None, showplots=False):
+    def __init__(self, datafile, outputdir, sheet=0, skiprows=0, headers=None, showplots=False):
         super().__init__(datafile, sheet, skiprows, headers)
         self.showplots = showplots
-        self.binwidth = binwidth
-        self.column = column_name
         self.outputdir = outputdir
-
         # Load data
         self.data = self.load_data()
         self.fig = None
-        self.histogramid = "%s_%s" % (self.bname, self.column)
-
-    def histo_types(self):
-        types = {0: 'Relative freq', 1: 'Density'} #, 2: 'Cumulative freq'}
-        return types
 
 
+    def getConfigurables(self):
+        '''
+        List of configurable parameters in order with defaults
+        :return:
+        '''
+        cfg = OrderedDict()
+        cfg['COLUMN']=''
+        cfg['BINWIDTH']=1
+        cfg['HISTOGRAM_FILENAME'] = 'HISTOGRAM.csv'
+        cfg['HISTOGRAM_FREQ_TYPE'] = 0
+        return cfg
 
-    def generateHistogram(self, freq=0):
+    def setConfigurables(self,cfg):
+        if 'COLUMN' in cfg.keys() and cfg['COLUMN'] is not None:
+            self.column = cfg['COLUMN']
+        else:
+            self.column =''
+        if 'BINWIDTH' in cfg.keys() and cfg['BINWIDTH'] is not None:
+            self.binwidth = cfg['BINWIDTH']
+        else:
+            self.binwidth = 1
+        if 'HISTOGRAM_FILENAME' in cfg.keys() and cfg['HISTOGRAM_FILENAME'] is not None:
+            self.suffix = cfg['HISTOGRAM_FILENAME']
+            if self.suffix.startswith("*"):
+                self.suffix=self.suffix[1:]
+        else:
+            self.suffix = 'HISTOGRAM.csv'
+
+        if 'HISTOGRAM_FREQ_TYPE' in cfg.keys() and cfg['HISTOGRAM_FREQ_TYPE'] is not None:
+            self.freq = int(cfg['HISTOGRAM_FREQ_TYPE'])
+        else:
+            self.freq = 0
+
+
+    def run(self):
         """
         Generate histogram and save to outputdir
         :param outputdir: where to save csv and png files to
         :param freq: 0=relative freq, 1=density, 2=cumulative
         :return:
         """
-        ftype = '_HISTOGRAM'
+
         n_bins = 10
         # Data column
         xdata = self.data[self.column]  # Series
@@ -58,13 +84,14 @@ class AutoHistogram(AutoData):
         maxv = int(np.ceil(max(xdata) / n_bins)) * n_bins
 
         bins = [x for x in range(minv,maxv,n_bins)]
-        if freq == 1:
-            ftype = ftype + '_density'
+        if self.freq == 1:
+            hist_title = self.bname + "_DENSITY_" + self.suffix
             n, bin_edges = np.histogram(xdata, bins=bins,density=True)
             if self.showplots:
                 xdata.plot.density()
         else:
             n, bin_edges = np.histogram(xdata, bins=bins,density=False)
+            hist_title = self.bname + "_" + self.suffix
             if self.showplots:
                 xdata.plot.hist()
         # histogram data
@@ -73,8 +100,8 @@ class AutoHistogram(AutoData):
         histdata[self.column]= n
 
         # filenames
-        outputfile = join(self.outputdir, self.histogramid + ftype + ".csv")
-        # outputplot = join(self.outputdir, self.histogramid + ftype +".html")
+        outputfile = join(self.outputdir, hist_title)
+        # outputplot = outputfile.replace(".csv",".html")
         histdata.to_csv(outputfile, index=False)
         print("Saved histogram data to ", outputfile)
         return histdata
@@ -107,11 +134,19 @@ if __name__ == "__main__":
     print("Input:", args.datafile)
     print("Output:", args.outputdir)
     try:
-        fd = AutoHistogram(args.datafile, args.outputdir, args.column, args.binwidth, args.showplots)
-        histo_types = fd.histo_types()
-        for t in histo_types.keys():
-            print(histo_types[t])
-            fd.generateHistogram(freq=t)
+        fd = AutoHistogram(args.datafile, args.outputdir, args.showplots)
+        cfg = fd.getConfigurables()
+        cfg['COLUMN'] = args.column
+        cfg['BINWIDTH'] = args.binwidth
+        for c in cfg.keys():
+            print("config set: ", c, "=", cfg[c])
+        fd.setConfigurables(cfg)
+
+        # Run through different types of histo
+        #freq: 0=relative freq, 1=density, 2=cumulative
+        for t in [0,1]:
+            fd.freq = t
+            fd.run()
 
     except ValueError as e:
         print("Error:", e)

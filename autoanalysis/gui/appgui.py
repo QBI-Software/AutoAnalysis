@@ -20,7 +20,7 @@ import wx.richtext
 class ConfigPanel ( wx.Panel ):
 	
 	def __init__( self, parent ):
-		wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, pos = wx.DefaultPosition, size = wx.Size( 662,790 ), style = wx.TAB_TRAVERSAL )
+		wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, pos = wx.DefaultPosition, size = wx.Size( 710,886 ), style = wx.TAB_TRAVERSAL )
 		
 		bSizer17 = wx.BoxSizer( wx.VERTICAL )
 		
@@ -33,7 +33,7 @@ class ConfigPanel ( wx.Panel ):
 		self.m_staticline14 = wx.StaticLine( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, wx.LI_HORIZONTAL )
 		bSizer17.Add( self.m_staticline14, 0, wx.EXPAND |wx.ALL, 5 )
 		
-		self.m_status = wx.StaticText( self, wx.ID_ANY, u"Settings for processing scripts", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_status = wx.StaticText( self, wx.ID_ANY, u"Settings for processing scripts (multiple configs possible)", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_status.Wrap( -1 )
 		self.m_status.SetFont( wx.Font( wx.NORMAL_FONT.GetPointSize(), 71, 93, 90, False, wx.EmptyString ) )
 		
@@ -41,8 +41,10 @@ class ConfigPanel ( wx.Panel ):
 		
 		bSizer14 = wx.BoxSizer( wx.HORIZONTAL )
 		
-		self.m_staticText24 = wx.StaticText( self, wx.ID_ANY, u"Configuration Set", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText24 = wx.StaticText( self, wx.ID_ANY, u"Configuration Name", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText24.Wrap( -1 )
+		self.m_staticText24.SetToolTipString( u"Type new name in box then \"Save changes\"" )
+		
 		bSizer14.Add( self.m_staticText24, 0, wx.ALL, 5 )
 		
 		cboConfigidChoices = [ u"general" ]
@@ -56,7 +58,7 @@ class ConfigPanel ( wx.Panel ):
 		self.m_grid1 = wx.grid.Grid( self, wx.ID_ANY, wx.DefaultPosition, wx.DefaultSize, 0 )
 		
 		# Grid
-		self.m_grid1.CreateGrid( 15, 2 )
+		self.m_grid1.CreateGrid( 20, 2 )
 		self.m_grid1.EnableEditing( True )
 		self.m_grid1.EnableGridLines( True )
 		self.m_grid1.EnableDragGridSize( True )
@@ -90,6 +92,9 @@ class ConfigPanel ( wx.Panel ):
 		
 		bSizer21.Add( self.btnSave, 0, wx.ALL, 5 )
 		
+		self.m_button13 = wx.Button( self, wx.ID_ANY, u"Add", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer21.Add( self.m_button13, 0, wx.ALL, 5 )
+		
 		
 		bSizer17.Add( bSizer21, 1, wx.ALL, 5 )
 		
@@ -100,6 +105,7 @@ class ConfigPanel ( wx.Panel ):
 		# Connect Events
 		self.cboConfigid.Bind( wx.EVT_COMBOBOX, self.OnLoadConfig )
 		self.btnSave.Bind( wx.EVT_BUTTON, self.OnSaveConfig )
+		self.m_button13.Bind( wx.EVT_BUTTON, self.OnAddRow )
 	
 	def __del__( self ):
 		pass
@@ -112,6 +118,9 @@ class ConfigPanel ( wx.Panel ):
 	def OnSaveConfig( self, event ):
 		event.Skip()
 	
+	def OnAddRow( self, event ):
+		event.Skip()
+	
 
 ###########################################################################
 ## Class ProcessPanel
@@ -120,7 +129,7 @@ class ConfigPanel ( wx.Panel ):
 class ProcessPanel ( wx.Panel ):
 	
 	def __init__( self, parent ):
-		wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, pos = wx.DefaultPosition, size = wx.Size( -1,-1 ), style = wx.TAB_TRAVERSAL )
+		wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, pos = wx.DefaultPosition, size = wx.Size( 773,941 ), style = wx.TAB_TRAVERSAL )
 		
 		bSizer19 = wx.BoxSizer( wx.VERTICAL )
 		
@@ -173,7 +182,7 @@ class ProcessPanel ( wx.Panel ):
 		self.m_stFilesout.Wrap( -1 )
 		bSizer15.Add( self.m_stFilesout, 0, wx.ALIGN_LEFT|wx.ALL|wx.EXPAND, 5 )
 		
-		bSizer16 = wx.BoxSizer( wx.VERTICAL )
+		bSizer16 = wx.BoxSizer( wx.HORIZONTAL )
 		
 		self.m_cbShowplots = wx.CheckBox( self, wx.ID_ANY, u"Display Interactive Plots", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_cbShowplots.SetValue(True) 
@@ -187,8 +196,11 @@ class ProcessPanel ( wx.Panel ):
 		
 		bSizer16.Add( self.m_btnRunProcess, 0, wx.ALL, 5 )
 		
+		self.btnLog = wx.Button( self, wx.ID_ANY, u"Show Log", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer16.Add( self.btnLog, 0, wx.ALL, 5 )
 		
-		bSizer15.Add( bSizer16, 1, wx.ALL|wx.EXPAND, 5 )
+		
+		bSizer15.Add( bSizer16, 1, wx.ALL, 5 )
 		
 		
 		bSizer20.Add( bSizer15, 1, wx.EXPAND, 5 )
@@ -216,12 +228,12 @@ class ProcessPanel ( wx.Panel ):
 		
 		self.SetSizer( bSizer19 )
 		self.Layout()
-		bSizer19.Fit( self )
 		
 		# Connect Events
 		self.m_checkListProcess.Bind( wx.EVT_LISTBOX, self.OnShowDescription )
 		self.m_checkListProcess.Bind( wx.EVT_CHECKLISTBOX, self.OnShowDescription )
 		self.m_btnRunProcess.Bind( wx.EVT_BUTTON, self.OnRunScripts )
+		self.btnLog.Bind( wx.EVT_BUTTON, self.OnShowLog )
 	
 	def __del__( self ):
 		pass
@@ -233,6 +245,9 @@ class ProcessPanel ( wx.Panel ):
 	
 	
 	def OnRunScripts( self, event ):
+		event.Skip()
+	
+	def OnShowLog( self, event ):
 		event.Skip()
 	
 
@@ -414,7 +429,7 @@ class FilesPanel ( wx.Panel ):
 		self.m_button19 = wx.Button( self, wx.ID_ANY, u"Browse", wx.DefaultPosition, wx.DefaultSize, 0 )
 		fgSizer4.Add( self.m_button19, 0, wx.ALL, 5 )
 		
-		self.m_staticText27 = wx.StaticText( self, wx.ID_ANY, u"Expt prefix (search text)", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText27 = wx.StaticText( self, wx.ID_ANY, u"Filename search text", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText27.Wrap( -1 )
 		self.m_staticText27.SetToolTipString( u"Select files with this search text (eg experiment code).  This is used as the prefix for batch compiled files." )
 		
@@ -429,19 +444,18 @@ class FilesPanel ( wx.Panel ):
 		
 		fgSizer4.Add( self.btnAutoFind, 0, wx.ALL, 5 )
 		
-		self.m_cbSelectall = wx.CheckBox( self, wx.ID_ANY, u"Select All", wx.DefaultPosition, wx.DefaultSize, 0 )
-		self.m_cbSelectall.SetValue(True) 
-		fgSizer4.Add( self.m_cbSelectall, 0, wx.ALL, 5 )
+		self.m_staticText251 = wx.StaticText( self, wx.ID_ANY, u"Add Files Manually", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText251.Wrap( -1 )
+		fgSizer4.Add( self.m_staticText251, 0, wx.ALL, 5 )
 		
-		self.m_tcDragdrop = wx.TextCtrl( self, wx.ID_ANY, u"Drag data files here (eg AllROI-D.txt)", wx.DefaultPosition, wx.Size( 300,100 ), wx.TE_READONLY|wx.TE_WORDWRAP )
+		self.m_tcDragdrop = wx.TextCtrl( self, wx.ID_ANY, u"Drag data files here", wx.DefaultPosition, wx.Size( 300,100 ), wx.TE_READONLY|wx.TE_WORDWRAP )
 		self.m_tcDragdrop.SetBackgroundColour( wx.Colour( 191, 191, 255 ) )
 		
 		fgSizer4.Add( self.m_tcDragdrop, 0, 0, 5 )
 		
-		self.m_cbMatchAny = wx.CheckBox( self, wx.ID_ANY, u"AutoFind Match Any ", wx.DefaultPosition, wx.DefaultSize, 0 )
-		self.m_cbMatchAny.SetToolTipString( u"Match Any Filename ending with Datafile filename" )
-		
-		fgSizer4.Add( self.m_cbMatchAny, 0, wx.ALL, 5 )
+		self.m_cbSelectall = wx.CheckBox( self, wx.ID_ANY, u"Select All", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_cbSelectall.SetValue(True) 
+		fgSizer4.Add( self.m_cbSelectall, 0, wx.ALL, 5 )
 		
 		self.m_staticText63 = wx.StaticText( self, wx.ID_ANY, u"Assign Group to selected files", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText63.Wrap( -1 )
@@ -539,5 +553,34 @@ class FilesPanel ( wx.Panel ):
 	
 	def OnColClick( self, event ):
 		event.Skip()
+	
+
+###########################################################################
+## Class dlgLogViewer
+###########################################################################
+
+class dlgLogViewer ( wx.Dialog ):
+	
+	def __init__( self, parent ):
+		wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"Log Viewer", pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.DEFAULT_DIALOG_STYLE )
+		
+		self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+		
+		bSizer15 = wx.BoxSizer( wx.VERTICAL )
+		
+		self.tcLog = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.DefaultSize, wx.TE_MULTILINE|wx.TE_READONLY|wx.TE_WORDWRAP )
+		self.tcLog.SetMinSize( wx.Size( 400,700 ) )
+		
+		bSizer15.Add( self.tcLog, 0, wx.ALL, 5 )
+		
+		
+		self.SetSizer( bSizer15 )
+		self.Layout()
+		bSizer15.Fit( self )
+		
+		self.Centre( wx.BOTH )
+	
+	def __del__( self ):
+		pass
 	
 

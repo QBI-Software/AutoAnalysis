@@ -14,7 +14,7 @@ process2:
   filesin: FILTERED_FILENAME
   output: local
   filesout: HISTOGRAM_FILENAME
-  modulename: autoanalysis.processmodules.AutoHistogram
+  modulename: autoanalysis.processmodules.Histogram
   classname: AutoHistogram
 process3:
   caption: 3. Batch Data

@@ -58,15 +58,27 @@ def CheckFilenames(filenames, configfiles):
     :param configfiles: matching filename for script as in config
     :return: filtered list
     """
-    newfiles = []
+    newfiles = {k: [] for k in filenames.keys() }
     for conf in configfiles:
-        for f in filenames:
-            parts = split(f)
-            if conf in parts[1]:
-                newfiles.append(f)
-            else:
-                # extract directory and seek files
-                newfiles = newfiles + [y for y in iglob(join(parts[0], '**', conf), recursive=True)]
+        if conf.startswith('*'):
+            conf = conf[1:]
+        for group in filenames.keys():
+            for f in filenames[group]:
+                parts = split(f)
+                if conf in parts[1]:
+                    newfiles[group].append(f)
+                else:
+                    # extract directory and seek files
+                    newfiles[group] = newfiles[group] + [y for y in iglob(join(parts[0], '**', conf), recursive=True)]
+                    if len(newfiles[group]) <=0:
+                        newfiles[group] = newfiles[group] + [y for y in
+                                                             iglob(join(parts[0], '**', '*'+conf), recursive=True)]
+
+    # if self.filesIn is not None:
+    #     checkedfilenames = CheckFilenames(self.filenames, self.filesIn)
+    #     files = [f for f in checkedfilenames if self.controller.datafile in f]
+    # else:
+    #     files = self.filenames
     return newfiles
 
 
@@ -75,7 +87,7 @@ def CheckFilenames(filenames, configfiles):
 lock = threading.Lock()
 event = threading.Event()
 hevent = threading.Event()
-
+####################################################################################################
 class TestThread(threading.Thread):
     def __init__(self, controller, filenames, outputdir, output, processname, module,classname, config):
         """Init Worker Thread Class."""
@@ -150,81 +162,140 @@ class TestThread(threading.Thread):
 
 class ProcessThread(threading.Thread):
     """Multi Worker Thread Class."""
-
     # ----------------------------------------------------------------------
-    def __init__(self, controller, wxObject, filenames, filesin, type, row, processname, module):
+    def __init__(self, controller, wxObject, modules, outputdir, filenames, row, processname, showplots):
         """Init Worker Thread Class."""
         threading.Thread.__init__(self)
         self.controller = controller
+        self.config = self.controller.db.getConfig(self.controller.currentconfig)
+        self.db = DBI(self.controller.configfile)
         self.wxObject = wxObject
         self.filenames = filenames
-        self.filesIn = filesin
+        self.output = outputdir
         self.row = row
-        self.type = type
+        self.showplots = showplots
         self.processname = processname
-        self.module = module
+        (self.module_name,self.class_name) = modules
         logger = logging.getLogger(processname)
         # self.start()  # start the thread
 
     # ----------------------------------------------------------------------
     def run(self):
         i = 0
+        total_files =0
         try:
             event.set()
             lock.acquire(True)
-            # Do work
             q = dict()
-            if self.filesIn is not None:
-                checkedfilenames = CheckFilenames(self.filenames, self.filesIn)
-                files = [f for f in checkedfilenames if self.controller.datafile in f]
+            if isinstance(self.filenames,dict):
+                batch = True
+                total_files = len(self.filenames.keys())
+                i = 0
+                for group in self.filenames.keys():
+                    if group == 'all' or len(self.filenames[group])<=0:
+                        continue
+                    count = (i/ total_files )* 100
+                    msg = "%s run: count=%d of %d (%d percent)" % (self.processname, i, total_files, count)
+                    print(msg)
+                    logger.info(msg)
+                    wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
+                    self.processBatch(self.filenames[group], q, group)
+                    i += 1
+
             else:
+                batch = False
                 files = self.filenames
-            total_files = len(files)
-            logger.info("Checked by type: (%s): \nFILES LOADED:%d\n%s", self.processname, total_files,
-                        "\n\t".join(files))
-            for i in range(total_files):
-                count = ((i + 1) * 100) / total_files
-                logger.info("FilterThread.run: count= %d", count)
-                wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
-                self.processFilter(files[i], q)
+                total_files = len(files)
+                for i in range(total_files):
+                    count = (i/ total_files )* 100
+                    msg = "%s run: count=%d of %d (%d percent)" % (self.processname, i, total_files, count)
+                    print(msg)
+                    logger.info(msg)
+                    wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
+                    self.processData(files[i], q)
 
             wx.PostEvent(self.wxObject, ResultEvent((100, self.row, total_files, total_files, self.processname)))
         except Exception as e:
             wx.PostEvent(self.wxObject, ResultEvent((-1, self.row, i + 1, total_files, self.processname)))
             logging.error(e)
-        except KeyboardInterrupt:
-            logger.warning("Keyboard interrupt in FilterThread")
-            self.terminate()
         finally:
-            logger.info('Finished FilterThread')
+            logger.info('Finished ProcessThread')
             # self.terminate()
             lock.release()
             event.clear()
 
     # ----------------------------------------------------------------------
-    def processFilter(self, filename, q):
+    def processData(self, filename, q):
         """
-        Activate filter process - multithreaded
-        :param datafile:
-        :param q:
+        Run module here - can modify according to class if needed
+        :param filename: data file to process
+        :param q: queue for results
         :return:
         """
-        logger.info("Process Filter with file: %s", filename)
-        datafile_msd = filename.replace(self.controller.datafile, self.controller.msdfile)
-        # Check datafile_msd is accessible - can use txt instead of xls
-        if not access(datafile_msd, R_OK) and '.xls' in splitext(datafile_msd)[1]:
-            f1 = datafile_msd.replace(splitext(datafile_msd)[1], '.txt')
-            if access(f1, R_OK):
-                datafile_msd = f1
+        logger.info("Process Data with file: %s", filename)
         # create local subdir for output
-        outputdir = join(dirname(filename), 'processed')
-        if not exists(outputdir):
-            mkdir(outputdir)
-        fmsd = self.module(self.controller.configfile, filename, datafile_msd, outputdir)
-        if fmsd.data is not None:
-            q[filename] = fmsd.runFilter()
+        if self.output == 'local':
+            outputdir = join(dirname(filename), 'processed')
+            if not exists(outputdir):
+                mkdir(outputdir)
+        else:
+            outputdir = self.output
+        # connect to db
+        self.db.getconn()
+        # Instantiate module
+        module = importlib.import_module(self.module_name)
+        class_ = getattr(module, self.class_name)
+        for fconf in ['SHEET','SKIPROWS','HEADERS']:
+            if fconf not in self.config.keys():
+                self.config[fconf]=0
+        mod = class_(filename, outputdir, sheet=self.config['SHEET'],
+                     skiprows=self.config['SKIPROWS'],
+                     headers=self.config['HEADERS'],showplots=self.showplots)
+        # Load all params required for module - get list from module
+        cfg = mod.getConfigurables()
+        for c in cfg.keys():
+            cfg[c] = self.db.getConfigByName(self.controller.currentconfig, c)
+            msg ="Process Data: config set: %s=%s" % (c,str(cfg[c]))
+            print(msg)
+            logger.debug(msg)
+        mod.setConfigurables(cfg)
+        if mod.data is not None:
+            q[filename] = mod.run()
         else:
             q[filename] = None
+        # connect to db
+        self.db.closeconn()
+
+    def processBatch(self, filelist, q, group=None):
+        """
+        Run module here - can modify according to class if needed
+        :param filename: data file to process
+        :param q: queue for results
+        :return:
+        """
+        logger.info("Process Batch with filelist: %d", len(filelist))
+        outputdir = self.output
+        # connect to db
+        self.db.getconn()
+        # Instantiate module
+        module = importlib.import_module(self.module_name)
+        class_ = getattr(module, self.class_name)
+        mod = class_(filelist, outputdir, showplots=self.showplots)
+        # Load all params required for module - get list from module
+        cfg = mod.getConfigurables()
+        for c in cfg.keys():
+            cfg[c] = self.db.getConfigByName(self.controller.currentconfig, c)
+            msg ="Process Batch: config set: %s=%s" % (c,str(cfg[c]))
+            logger.debug(msg)
+        mod.setConfigurables(cfg)
+        if group is not None:
+            mod.prefix = group
+            q[group] = mod.run()
+        else:
+            q[mod.base] = mod.run()
+        # connect to db
+        self.db.closeconn()
+
 
     # ----------------------------------------------------------------------
     def terminate(self):
@@ -240,9 +311,10 @@ class Controller():
         self.logger = self.loadLogger()
         self.processfile = processfile
         self.cmodules = self.loadProcesses()
+        self.configfile = configfile
+        self.currentconfig = configID #multiple configs possible
         # connect to db
         self.db = DBI(configfile)
-        self.currentconfig = configID #multiple configs possible
         self.db.getconn()
 
     def loadProcesses(self):
@@ -253,8 +325,7 @@ class Controller():
             cmodules={}
             for p in self.processes:
                 msg = "Controller:LoadProcessors: loading %s=%s" % (p, self.processes[p]['caption'])
-                print(msg)
-                logging.info(msg)
+                logging.debug(msg)
                 module_name = self.processes[p]['modulename']
                 class_name = self.processes[p]['classname']
                 cmodules[p] =(module_name,class_name)
@@ -275,8 +346,8 @@ class Controller():
             expt = expt + "_"
         if not access(join(homedir, "logs"), R_OK):
             mkdir(join(homedir, "logs"))
-        logfile = join(homedir, "logs", expt+'analysis.log')
-        handler = RotatingFileHandler(filename=logfile, maxBytes=10000000, backupCount=10)
+        self.logfile = join(homedir, "logs", expt+'analysis.log')
+        handler = RotatingFileHandler(filename=self.logfile, maxBytes=10000000, backupCount=10)
         formatter = logging.Formatter('[ %(asctime)s %(levelname)-4s ] (%(threadName)-9s) %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
@@ -321,7 +392,7 @@ class Controller():
 
 
     # ----------------------------------------------------------------------
-    def RunProcess(self, wxGui, process,outputdir,filenames, i,  expt, row, showplots=False):
+    def RunProcess(self, wxGui, process,outputdir,filenames, row, showplots=False):
         """
         Instantiate Thread with type for Process
         :param wxGui:
@@ -330,23 +401,32 @@ class Controller():
         :param row:
         :return:
         """
-        type = self.processes[i]['href']
-        processname = self.processes[i]['caption']
+
+        type = self.processes[process]['href']
+        processname = self.processes[process]['caption']
         filesIn = []
-        for f in self.processes[i]['files'].split(", "):
-            fin = self.db.getConfigByName(self.currentconfig,f)
+        for f in self.processes[process]['filesin'].split(", "):
+            fin = self.db.getConfigByName(self.currentconfig, f)
             if fin is not None:
                 filesIn.append(fin)
             else:
                 filesIn.append(f)
+        filenames = CheckFilenames(filenames,filesIn)
+        # filesout = self.processes[process]['filesout'] #TODO link up with module config?
+        # suffix = self.db.getConfigByName(self.currentconfig,filesout)
+        if self.processes[process]['output'] == 'local':
+            outputdir = self.processes[process]['output']
+            filenames = filenames['all']
 
-        logger.info("Running Threads - start: %s (Expt prefix: %s) [row: %d]", type, expt, row)
-        wx.PostEvent(wxGui, ResultEvent((0, row, 0, len(filenames), processname)))
-
-        t = ProcessThread(self, wxGui, self.cmodules[i],outputdir, filenames, filesIn, type, row, processname, showplots )
-        t.start()
-
-        logger.info("Running Thread - loaded: %s", type)
+        if len(filenames) > 0:
+            logger.info("Load Process Threads: %s [row: %d]", type, row)
+            wx.PostEvent(wxGui, ResultEvent((0, row, 0, len(filenames), processname)))
+            t = ProcessThread(self, wxGui, self.cmodules[process],outputdir, filenames, row, processname, showplots )
+            t.start()
+            logger.info("Running Thread: %s", type)
+        else:
+            logger.error("No files to process")
+            raise ValueError("No matched files to process")
 
     # ----------------------------------------------------------------------
 

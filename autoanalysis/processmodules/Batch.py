@@ -15,7 +15,7 @@ import logging
 import re
 from glob import iglob
 from os import R_OK, access
-from os.path import join, isdir, commonpath, sep, basename, splitext
+from os.path import join, isdir, commonpath, commonprefix,sep, basename, splitext
 
 from configobj import ConfigObj
 from numpy import unique
@@ -23,66 +23,49 @@ import argparse
 import pandas as pd
 from plotly import offline
 from plotly.graph_objs import Layout, Scatter
+from collections import OrderedDict
 DEBUG = 1
 
 class AutoBatch:
-    def __init__(self, inputfiles, outputdir, datafile_searchtext,column_names, showplots=False):
-        (self.base, self.inputfiles) = self.getSelectedFiles(inputfiles, datafile_searchtext)
-        self.numcells = len(self.inputfiles)
-        self.outputdir = outputdir
-        self.outputfilename= join(self.outputdir,"BATCH_" + self.base.split(sep)[-1] + "_"+ datafile_searchtext.split('.')[0] +".csv")
-        self.colnames = column_names.split(',')
+    def __init__(self, inputfiles, outputdir, showplots=False):
+        """
+
+        :param inputfiles: Assumes these are correct files - already filtered
+        :param outputdir:
+        :param showplots:
+        """
+        self.inputfiles = inputfiles
+        self.base = commonpath(inputfiles)
+        if len(outputdir) <=0:
+            self.outputdir = self.base
+        else:
+            self.outputdir = outputdir
         self.showplots = showplots
         self.n = 1  # generating id
+        self.prefix =''
 
+    def getConfigurables(self):
+        '''
+        List of configurable parameters in order with defaults
+        :return:
+        '''
+        cfg = OrderedDict()
+        cfg['BATCH_COLUMN_NAMES']=[]
+        cfg['BATCH_FILENAME']="BATCH.csv"
+        return cfg
 
-    def getSelectedFiles(self, inputdir, searchtext):
-        """
-        Check list or directory contains only datafiles
-        tries several methods for detecting files
-        :param inputdir: list of files or input directory
-        :param searchtext: matching datafile name
-        :return: basename and file list
-        """
-        files = []
-        base = ''
-        # get list of files from a directory
-        if not isinstance(inputdir, list) and isdir(inputdir):
-            base = inputdir
-            if access(inputdir, R_OK):
-                allfiles = [y for y in iglob(join(inputdir, '**'), recursive=True)]
-                if len(allfiles) > 0:
-                    # Filter on searchtext - match on filename
-                    files = [f for f in allfiles if (searchtext in basename(f))]
-                    if len(files) <= 0:
-                        msg = "Batch: No files found in inputdir for datafile searchtext: %s %s" % (inputdir,searchtext)
-                        logging.error(msg)
-                        raise ValueError(msg)
-                else:
-                    msg = "Batch: No files found in inputdir: %s" % inputdir
-                    logging.error(msg)
-                    raise IOError(msg)
-
-            else:
-                raise IOError("Batch: Cannot access directory: %s", inputdir)
+    def setConfigurables(self,cfg):
+        if 'BATCH_COLUMN_NAMES' in cfg.keys() and cfg['BATCH_COLUMN_NAMES'] is not None:
+            self.colnames = cfg['BATCH_COLUMN_NAMES'].split(',')
         else:
-            # assume we have a list as input - exclude duplicates
-            if isinstance(inputdir, list):
-                allfiles = unique(inputdir).tolist()
-            else:
-                allfiles = unique(inputdir.tolist()).tolist()
-            files = [f for f in allfiles if (searchtext in basename(f))]
-            base = commonpath(files)
-        print("Total Files Found: ", len(files))
-        #generate IDs for each file (based on filename or unique)
-        filedict = {}
-        basenames = [basename(f) for f in files]
-        uids = unique(basenames)
-        usefilenames = (len(uids)==len(files))
-        for f in files:
-            filedict[self.generateID(f, usefilenames)]= f
+            self.colnames =[]
+        if 'BATCH_FILENAME' in cfg.keys() and cfg['BATCH_FILENAME'] is not None:
+            self.suffix = cfg['BATCH_FILENAME']
+            if self.suffix.startswith('*'):
+                self.suffix = self.suffix[1:]
+        else:
+            self.suffix ="BATCH.csv"
 
-        return (base, filedict)
 
     def generateID(self, f,usefilenames=True):
         """
@@ -93,17 +76,20 @@ class AutoBatch:
         """
         # Generate unique cell ID
         (filename,ext) = splitext(basename(f))
-
-        if usefilenames:
-            cell = filename
+        if len(self.prefix) > 0:
+            prefix = self.prefix + "_"
         else:
-            cell = 'c{0:03d}'.format(self.n)
+            prefix = ''
+        if usefilenames:
+            cell = prefix + filename
+        else:
+            cell = prefix + 'c{0:03d}'.format(self.n)
             self.n += 1
         if DEBUG:
             print("Cellid=", cell)
         return cell
 
-    def validHeader(self,colname,df):
+    def validHeader(self,colnames,df):
         """
         Check column names are in data files
         :param colname: array of colname/s
@@ -111,15 +97,15 @@ class AutoBatch:
         :return: true if present, false if not (all columns)
         """
         matches = []
-        for col in colname:
+        for col in colnames:
             matches.append(col in df.columns)
-        if sum(matches)== len(colname):
+        if sum(matches)== len(colnames):
             rtn = True
         else:
             rtn = False
         return rtn
 
-    def generatePlots(self,df):
+    def generatePlots(self,df, pfilename):
         if len(df)==1:
             df.plot()
         else:
@@ -130,7 +116,6 @@ class AutoBatch:
                 data.append(Scatter(y=df[col], x=xi,name=col,mode='markers'))
 
             # Create plotly plot
-            pfilename = self.outputfilename.replace('.csv','.html')
             offline.plot({"data": data,
                           "layout": Layout(title=title,
                                            xaxis={'title': self.colnames},
@@ -140,7 +125,7 @@ class AutoBatch:
         return pfilename
 
 
-    def combineData(self,colname=None):
+    def run(self):
         """
         Combine data from columns specified into batch output file
         Include basic plot if showplots is flagged
@@ -148,24 +133,29 @@ class AutoBatch:
         :return: outputfilename
         """
         df = None
-        if colname is None:
-            colname = self.colnames
-            if colname is None or len(colname) <=0:
-                raise ValueError('No columns specified for data extraction')
+        if self.colnames is None:
+            raise ValueError('No columns specified for data extraction')
         batchout = {}
-        for fid,f in self.inputfiles.items():
-            if basename(f).endswith('.csv'):
+        for f in self.inputfiles:
+            bname = basename(f)
+            if bname.endswith('.csv'):
+                fid = self.generateID(bname)
                 df = pd.read_csv(f)
-                if self.validHeader(colname, df):
-                    data = [x[0] for x in df[colname].get_values()]
+                if self.validHeader(self.colnames, df):
+                    data = [x[0] for x in df[self.colnames].get_values()]
                     batchout[fid] = data
         if len(batchout) > 0:
             df = pd.DataFrame.from_dict(batchout,orient='index').T.fillna('')
             #save to file
-            df.to_csv(self.outputfilename,index=False)
+            fparts = [self.base.split(sep)[-1], self.suffix]
+            if len(self.prefix) > 0:
+                fparts = [self.prefix] + fparts
+            outputfilename = join(self.outputdir, "_".join(fparts))
+            df.to_csv(outputfilename,index=False)
             if self.showplots:
-                self.generatePlots(df)
-        return df
+                plotfilename = outputfilename.replace('.csv','.html')
+                self.generatePlots(df,plotfilename)
+        return outputfilename
 
 ################################################################################
 def create_parser():
@@ -176,11 +166,11 @@ def create_parser():
                 Combines data from datafiles to output file
 
                  ''')
-    parser.add_argument('--datafile', action='store', help='Search text of filename',
+    parser.add_argument('--search', action='store', help='Search text of filename',
                         default="_Image.csv")
-    parser.add_argument('--outputdir', action='store', help='Output directory (must exist)',default="..\\..\\dataoutput")
+    parser.add_argument('--outputdir', action='store', help='Output directory (must exist)',default="D:\\Data\\Csv\\output")
     parser.add_argument('--inputdir', action='store', help='Input directory',
-                        default="..\\..\\sampledata")
+                        default="D:\\Data\\Csv\\input")
     parser.add_argument('--column', action='store', help='Column header/s to be combined',
                         default="Count_ColocalizedGAD_DAPI_Objects")
     parser.add_argument('--showplots', action='store_true', help='Display popup plots', default=True)
@@ -191,15 +181,22 @@ def create_parser():
 if __name__ == '__main__':
     parser = create_parser()
     args = parser.parse_args()
-    datafile = args.datafile
+    datafile_searchtext = args.search
     outputdir = args.outputdir
-    column_name = args.column
     inputdir = args.inputdir
     showplots = True
-    batch = AutoBatch(inputdir, outputdir, datafile, column_name, showplots)
-    for f in batch.inputfiles:
-        print("File:",f)
-        #print("ID:", batch.generateID(f))
-    #Generate output file
-    df_out = batch.combineData()
-    print("Output: ", batch.outputfilename, " data=", len(df_out))
+    # inputfiles, outputdir, datafile_searchtext,showplots=False)
+    allfiles = [y for y in iglob(join(inputdir, '**','*Filtered.csv'), recursive=True)]
+
+    for group in ['control','treatment1']:
+        inputfiles = [f for f in allfiles if re.search(group, f, flags=re.IGNORECASE)]
+        batch = AutoBatch(inputfiles, outputdir, showplots)
+        batch.prefix = group
+        cfg = batch.getConfigurables()
+        cfg['BATCH_COLUMN_NAMES'] = args.column
+        for c in cfg.keys():
+            print("config set: ", c, "=", cfg[c])
+        batch.setConfigurables(cfg)
+        #Generate output file
+        outputfilename = batch.run()
+        print("Output: ", outputfilename)

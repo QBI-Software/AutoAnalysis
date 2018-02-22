@@ -17,7 +17,7 @@ import logging
 from os.path import join, basename, splitext
 from collections import OrderedDict
 import pandas as pd
-
+from autoanalysis.db.dbquery import DBI
 from autoanalysis.processmodules.DataParser import AutoData
 
 
@@ -27,7 +27,7 @@ class AutoFilter(AutoData):
     Filter class for filtering a dataset based on a single column of data between min and max limits
     """
 
-    def __init__(self, datafile,outputdir, sheet=0, skiprows=0, headers=None):
+    def __init__(self, datafile,outputdir, sheet=0, skiprows=0, headers=None, showplots=False):
         super().__init__(datafile, sheet, skiprows, headers)
         # Load data
         self.outputdir = outputdir
@@ -45,6 +45,7 @@ class AutoFilter(AutoData):
         cfg['OUTPUTALLCOLUMNS']=True
         cfg['MINRANGE']=0.0
         cfg['MAXRANGE']=100.0
+        cfg['FILTERED_FILENAME'] = 'FILTERED.csv'
         return cfg
 
     def setConfigurables(self,cfg):
@@ -64,6 +65,12 @@ class AutoFilter(AutoData):
             self.maxlimit = float(cfg['MAXRANGE'])
         else:
             self.maxlimit = 100.0
+        if 'FILTERED_FILENAME' in cfg.keys() and cfg['FILTERED_FILENAME'] is not None:
+            self.suffix = cfg['FILTERED_FILENAME']
+            if self.suffix.startswith('*'):
+                self.suffix = self.suffix[1:]
+        else:
+            self.suffix = 'FILTERED.csv'
 
     def run(self):
         """
@@ -81,7 +88,7 @@ class AutoFilter(AutoData):
             self.logandprint(msg)
 
             # Save files
-            fdata = join(self.outputdir, self.bname + "_FILTERED.csv")
+            fdata = join(self.outputdir, self.bname + "_"+self.suffix)
 
             try:
                 if self.outputallcolumns:
@@ -111,16 +118,26 @@ if __name__ == "__main__":
                         default="Count_ColocalizedGAD_DAPI_Objects")
     args = parser.parse_args()
 
-    outputdir = join("..\\..\\", args.outputdir)
+    outputdir = join("..","..", args.outputdir)
     datafile = join(outputdir, args.datafile)
 
     print("Input:", datafile)
     print("Output:", outputdir)
 
     try:
-        fmsd = AutoFilter(datafile, outputdir, args.column, minlimit=args.minlimit, maxlimit=args.maxlimit)
-        if fmsd.data is not None:
-            fmsd.run()
+        mod = AutoFilter(datafile, outputdir,False)
+        cfg = mod.getConfigurables()
+        for c in cfg.keys():
+            print("config set: ",c,"=", cfg[c])
+        #set values - this will be done from configdb
+        cfg['COLUMN']=args.column
+        cfg['MINRANGE'] = args.minlimit
+        cfg['MAXRANGE'] = args.maxlimit
+
+        mod.setConfigurables(cfg)
+        if mod.data is not None:
+            mod.run()
 
     except Exception as e:
         print("Error: ", e)
+

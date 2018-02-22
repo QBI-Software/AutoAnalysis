@@ -20,7 +20,7 @@ from os.path import abspath, dirname
 import glob
 from configobj import ConfigObj
 from autoanalysis.controller import EVT_RESULT, Controller
-from autoanalysis.gui.appgui import ConfigPanel, FilesPanel, WelcomePanel, ProcessPanel
+from autoanalysis.gui.appgui import ConfigPanel, FilesPanel, WelcomePanel, ProcessPanel,dlgLogViewer
 
 __version__ = '0.0.0'
 
@@ -191,6 +191,8 @@ class Config(ConfigPanel):
         cids = self.dbi.getConfigIds()
         if len(cids) > 0:
             self.cboConfigid.Set(cids)
+            selection = self.cboConfigid.FindString(configid)
+            self.cboConfigid.SetSelection(selection)
         # Load controller
         self.parent.controller.currentconfig = configid
         #reload other panels
@@ -202,7 +204,8 @@ class Config(ConfigPanel):
         self.Parent.Warn(msg)
         self.dbi.closeconn()
 
-
+    def OnAddRow(self, event):
+        self.m_grid1.AppendRows(1, True)
 
 ########################################################################
 class MyFileDropTarget(wx.FileDropTarget):
@@ -260,11 +263,7 @@ class FileSelectPanel(FilesPanel):
         if dlg.ShowModal() == wx.ID_OK:
             self.outputdir = str(dlg.GetPath())
             self.txtOutputdir.SetValue(self.outputdir)
-            # initialize Compare Panel with outputdir
-            cpanel = self.getComparePanel()
-            if cpanel is not None:
-                cpanel.m_tcGp1Files.SetValue(self.outputdir)
-                cpanel.m_tcGp2Files.SetValue(self.outputdir)
+
         dlg.Destroy()
 
     def OnAssignGroup(self, event):
@@ -337,30 +336,23 @@ class FileSelectPanel(FilesPanel):
         :return:
         """
         self.btnAutoFind.Disable()
-        fullsearch = self.m_cbMatchAny.GetValue()
         self.m_status.SetLabelText("Finding files ... please wait")
-        if fullsearch:
-            allfiles = [y for y in iglob(join(self.inputdir, '**', '*' + self.datafile), recursive=True)]
-        else:
-            allfiles = [y for y in iglob(join(self.inputdir, '**', self.datafile), recursive=True)]
+        allfiles = [y for y in iglob(join(self.inputdir, '**'), recursive=True)]
         searchtext = self.m_tcSearch.GetValue()
         if (len(searchtext) > 0):
             filenames = [f for f in allfiles if re.search(searchtext, f, flags=re.IGNORECASE)]
         else:
-            filenames = allfiles
-
+            filenames = [f for f in allfiles if not isdir(f)]
+        #Assign files to group based on filenames
+        groups = self.m_cbGroups.GetItems()
         for fname in filenames:
             group = ''
-            # group as directory name ONLY
-            for pfix in self.Parent.prefixes:
+            # group if available
+            for g in groups:
                 group = ''
-                if pfix.upper() in fname.upper().split(sep):
-                    group = pfix
+                if g.upper() in fname.upper().split(sep):
+                    group = g
                     break
-                elif len(searchtext) > 0 and re.search(searchtext + pfix, fname, flags=re.IGNORECASE):
-                    group = pfix
-                    break
-
             self.m_dataViewListCtrl1.AppendItem([True, group, fname])
 
         self.col_file.SetMinWidth(wx.LIST_AUTOSIZE)
@@ -377,17 +369,6 @@ class FileSelectPanel(FilesPanel):
         print("Clear items in list")
         self.m_dataViewListCtrl1.DeleteAllItems()
 
-    def getComparePanel(self):
-        """
-        Get access to panel
-        :return:
-        """
-        panel = None
-        for fp in self.Parent.Children:
-            if isinstance(fp, CompareRunPanel):
-                panel = fp
-                break
-        return panel
 
 
 ########################################################################
@@ -395,6 +376,8 @@ class ProcessRunPanel(ProcessPanel):
     def __init__(self, parent):
         super(ProcessRunPanel, self).__init__(parent)
         self.loadController()
+        self.db = DBI(self.controller.configfile)
+        self.db.getconn()
         # self.controller = parent.controller
         # Bind timer event
         # self.Bind(wx.EVT_TIMER, self.progressfunc, self.controller.timer)
@@ -414,15 +397,16 @@ class ProcessRunPanel(ProcessPanel):
 
     def OnShowDescription(self, event):
         print(event.String)
+
         desc = [self.controller.processes[p]['description'] for p in self.controller.processes if
                 self.controller.processes[p]['caption'] == event.String]
-        filesIn = [self.controller.processes[p]['files'] for p in self.controller.processes if
+        filesIn = [self.controller.processes[p]['filesin'] for p in self.controller.processes if
                    self.controller.processes[p]['caption'] == event.String]
         filesOut = [self.controller.processes[p]['filesout'] for p in self.controller.processes if
                     self.controller.processes[p]['caption'] == event.String]
         # Load from Config
-        filesIn = [self.controller.config[f] for f in filesIn[0].split(", ")]
-        filesOut = [self.controller.config[f] for f in filesOut[0].split(", ")]
+        filesIn = [self.controller.db.getConfigByName(self.controller.currentconfig,f) for f in filesIn[0].split(", ")]
+        filesOut = [self.controller.db.getConfigByName(self.controller.currentconfig,f) for f in filesOut[0].split(", ")]
         # Load to GUI
         self.m_stTitle.SetLabelText(event.String)
         self.m_stDescription.SetLabelText(desc[0])
@@ -503,21 +487,26 @@ class ProcessRunPanel(ProcessPanel):
         showplots = self.m_cbShowplots.GetValue()
         # Get data from other panels
         filepanel = self.getFilePanel()
-        filenames = {'all': [], self.Parent.prefixes[0]: [], self.Parent.prefixes[1]: []}
+        filenames = {'all': []}
+        groups = filepanel.m_cbGroups.GetItems()
+        for g in groups:
+            filenames[g]=[]
+
         num_files = filepanel.m_dataViewListCtrl1.GetItemCount()
         outputdir = filepanel.txtOutputdir.GetValue()  # for batch processes
-
-        expt = filepanel.m_tcSearch.GetValue()
-        # reload logging to output to outputdir
-        if len(outputdir) > 0:
-            self.controller.loadLogger(outputdir, expt)
-        if len(expt) <= 0:
-            msg = 'No prefix for batch files. If required, enter in Files panel - prefix and re-run.'
-            self.Parent.Warn(msg)
+        # expt = filepanel.m_tcSearch.GetValue()
+        # # reload logging to output to outputdir
+        # if len(outputdir) > 0:
+        #     self.controller.loadLogger(outputdir, expt)
+        # if len(expt) <= 0:
+        #     msg = 'No prefix for batch files. If required, enter in Files panel - prefix and re-run.'
+        #     self.Parent.Warn(msg)
 
         print('All Files:', num_files)
         try:
+            self.db.getconn()
             if len(selections) > 0 and num_files > 0:
+                # Get selected files and sort into groups
                 for i in range(0, num_files):
                     if filepanel.m_dataViewListCtrl1.GetToggleValue(i, 0):
                         fname = filepanel.m_dataViewListCtrl1.GetValue(i, 2)
@@ -526,24 +515,20 @@ class ProcessRunPanel(ProcessPanel):
                             filenames['all'].append(fname)
                             if len(group) > 0:
                                 filenames[group].append(fname)
-
-                print('Selected Files:', len(filenames))
+                print('Selected Files:', len(filenames['all']))
                 if len(filenames) <= 0:
-                    raise ValueError(
-                        "No files selected - please go to Files Panel and add files (not directories) to list")
+                    raise ValueError("No files selected in Files Panel")
 
                 row = 0
                 # For each process
-                for p in selections:
-                    i = \
-                    [i for i in range(len(self.controller.processes)) if p == self.controller.processes[i]['caption']][
-                        0]
-                    if self.controller.processes[i]['ptype'] == 'indiv':
-                        self.controller.RunProcess(self, filenames['all'], i, outputdir, expt, row)
-                    else:
-                        self.controller.RunProcess(self, filenames, i, outputdir, expt, row, showplots)
+                for pcaption in selections:
+                    for p in self.controller.processes.keys():
+                        if self.controller.processes[p]['caption']==pcaption:
+                            break
+                    print("processname =", p)
+
+                    self.controller.RunProcess(self, p, outputdir,filenames, row, showplots)
                     row = row + 1
-                    print('Next process: row=', row)
 
             else:
                 if len(selections) <= 0:
@@ -554,6 +539,21 @@ class ProcessRunPanel(ProcessPanel):
             self.Parent.Warn(e.args[0])
             # Enable Run button
             self.m_btnRunProcess.Enable()
+        finally:
+            if self.db is not None:
+                self.db.closeconn()
+
+    def OnShowLog(self, event):
+        """
+        Load logfile into viewer
+        :param event:
+        :return:
+        """
+        dlg = dlgLogViewer(self)
+        logfile = self.controller.logfile
+        dlg.tcLog.LoadFile(logfile)
+        dlg.ShowModal()
+        dlg.Destroy()
 
 
 ########################################################################
