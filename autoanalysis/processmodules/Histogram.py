@@ -104,7 +104,7 @@ class AutoHistogram(AutoData):
         # outputplot = outputfile.replace(".csv",".html")
         histdata.to_csv(outputfile, index=False)
         print("Saved histogram data to ", outputfile)
-        return histdata
+        return outputfile
 
 
 def create_parser():

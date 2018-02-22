@@ -34,6 +34,7 @@ class AutoFilter(AutoData):
         msg = "Filter: Loading data from %s" % self.datafile
         self.data = self.load_data()
         self.logandprint(msg)
+        self.suffix = 'FILTERED.csv'
 
     def getConfigurables(self):
         '''
@@ -69,8 +70,7 @@ class AutoFilter(AutoData):
             self.suffix = cfg['FILTERED_FILENAME']
             if self.suffix.startswith('*'):
                 self.suffix = self.suffix[1:]
-        else:
-            self.suffix = 'FILTERED.csv'
+
 
     def run(self):
         """

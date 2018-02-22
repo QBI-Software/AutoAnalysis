@@ -167,7 +167,7 @@ def create_parser():
 
                  ''')
     parser.add_argument('--search', action='store', help='Search text of filename',
-                        default="_Image.csv")
+                        default='*Filtered.csv')
     parser.add_argument('--outputdir', action='store', help='Output directory (must exist)',default="D:\\Data\\Csv\\output")
     parser.add_argument('--inputdir', action='store', help='Input directory',
                         default="D:\\Data\\Csv\\input")
@@ -186,7 +186,7 @@ if __name__ == '__main__':
     inputdir = args.inputdir
     showplots = True
     # inputfiles, outputdir, datafile_searchtext,showplots=False)
-    allfiles = [y for y in iglob(join(inputdir, '**','*Filtered.csv'), recursive=True)]
+    allfiles = [y for y in iglob(join(inputdir, '**',datafile_searchtext), recursive=True)]
 
     for group in ['control','treatment1']:
         inputfiles = [f for f in allfiles if re.search(group, f, flags=re.IGNORECASE)]

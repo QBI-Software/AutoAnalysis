@@ -14,6 +14,10 @@ class TestController(unittest.TestCase):
         self.dbi.getconn()
         self.currentconfig = 'general'
         self.controller = Controller(self.configfile, self.currentconfig, self.processfile)
+        # TEST DATA
+        self.datafile = "D:\\Data\\Csv\\input\\control\\Brain10_Image.csv"
+        self.outputdir = "D:\\Data\\Csv\\\output"
+        self.testcolumn = 'Count_ColocalizedGAD_DAPI_Objects'
 
     def tearDown(self):
         self.dbi.closeconn()
@@ -38,10 +42,7 @@ class TestController(unittest.TestCase):
         class_name = self.controller.processes[testprocess]['classname']
         module = importlib.import_module(module_name)
         class_ = getattr(module, class_name)
-        #Instantiate FilterClass
-        datafile = "D:\\data\\testdata\\input\\amunet.csv"
-        outputdir = "D:\\data\\testdata\\output"
-        mod = class_(datafile,outputdir)
+        mod = class_(self.datafile,self.outputdir)
         self.assertTrue(isinstance(mod, class_)) #class instantiated
         self.assertGreater(len(mod.data),0) #data loaded
 
@@ -52,13 +53,11 @@ class TestController(unittest.TestCase):
         module = importlib.import_module(module_name)
         class_ = getattr(module, class_name)
         #Instantiate FilterClass
-        datafile = "D:\\data\\testdata\\input\\amunet.csv"
-        outputdir = "D:\\data\\testdata\\output"
-        mod = class_(datafile, outputdir, sheet=0,
+        mod = class_(self.datafile,self.outputdir, sheet=0,
                      skiprows=0,
                      headers=0)
         # set vars manually
-        mod.column = "AEV"
+        mod.column = self.testcolumn
         mod.outputallcolumns = True
         mod.minlimit = 20
         mod.maxlimit = 80
@@ -73,9 +72,7 @@ class TestController(unittest.TestCase):
         module = importlib.import_module(module_name)
         class_ = getattr(module, class_name)
         #Instantiate FilterClass
-        datafile = "D:\\data\\testdata\\input\\amunet.csv"
-        outputdir = "D:\\data\\testdata\\output"
-        mod = class_(datafile, outputdir, sheet=self.dbi.getConfigByName(self.currentconfig,'sheet'),
+        mod = class_(self.datafile,self.outputdir, sheet=self.dbi.getConfigByName(self.currentconfig,'sheet'),
                      skiprows=self.dbi.getConfigByName(self.currentconfig,'skiprows'),
                      headers=self.dbi.getConfigByName(self.currentconfig,'headers'))
         cfg = mod.getConfigurables()
@@ -84,7 +81,7 @@ class TestController(unittest.TestCase):
             cfg[c] = self.dbi.getConfigByName(self.currentconfig,c)
             print("config set: ", cfg[c])
         mod.setConfigurables(cfg)
-        self.assertEqual(mod.column,'AEV')
+        self.assertEqual(mod.column,self.testcolumn)
         mod.run()
 
     def test_runProcessThread(self):
@@ -93,12 +90,10 @@ class TestController(unittest.TestCase):
         self.assertEqual(type,'filter')
         output= self.controller.processes[testprocess]['output']
         processname = self.controller.processes[testprocess]['caption']
-        filenames = ["D:\\data\\testdata\\input\\amunet.csv"]
-        outputdir = "D:\\data\\testdata\\output"
         module_name = self.controller.processes[testprocess]['modulename']
         class_name = self.controller.processes[testprocess]['classname']
         config = self.controller.db.getConfig(self.currentconfig)
         # Run Thread
-        t = TestThread(self.controller, filenames, outputdir,output, processname, module_name,class_name,config)
+        t = TestThread(self.controller, self.datafile,self.outputdir,output, processname, module_name,class_name,config)
         t.start()
         print("Running Thread - loaded: ", type)

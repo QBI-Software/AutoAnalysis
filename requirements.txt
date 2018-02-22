@@ -1,8 +1,10 @@
 altgraph==0.15
 appdirs==1.4.3
+attrs==17.4.0
 certifi==2017.11.5
 chardet==3.0.4
 click==6.7
+colorama==0.3.9
 configobj==5.0.6
 cx-Freeze==5.1.1
 cycler==0.10.0
@@ -14,6 +16,7 @@ ipython-genutils==0.2.0
 itsdangerous==0.24
 jsonschema==2.6.0
 jupyter-core==4.4.0
+linecache2==1.0.0
 lxml==4.1.1
 macholib==1.9
 MarkupSafe==1.0
@@ -25,10 +28,15 @@ pandas==0.21.1
 patsy==0.4.1
 pefile==2017.11.5
 plotly==2.2.3
+pluggy==0.6.0
+py==1.5.2
 PyInstaller==3.3.1
 pyparsing==2.2.0
+pypiwin32==220
+pytest==3.4.0
 python-dateutil==2.6.1
 pytz==2017.3
+PyYAML==3.12
 requests==2.18.4
 scipy==1.0.0
 seaborn==0.8.1
@@ -36,7 +44,9 @@ SimpleConfigParser==0.1.0
 sip==4.19.3
 six==1.11.0
 tabulate==0.8.2
+traceback2==1.4.0
 traitlets==4.3.2
+unittest2==1.1.0
 urllib3==1.22
 wxPython==4.0.0b2
 xlrd==1.1.0

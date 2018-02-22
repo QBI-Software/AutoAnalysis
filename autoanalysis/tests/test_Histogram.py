@@ -8,32 +8,22 @@ class TestHistogram(unittest.TestCase):
     def setUp(self):
         parser = create_parser()
         args = parser.parse_args()
-        datafile = args.datafile
-        outputdir = args.outputdir
-        column_name = args.column
-        binwidth = args.binwidth
-        sheet = 0
-        skiprows = 0
-        headers = None
-        showplots = True
-        self.fd = AutoHistogram(datafile, outputdir, column_name, binwidth, sheet, skiprows, headers, showplots)
-
-    def test_histotypes(self):
-        data = self.fd.histo_types()
-        expected = {0: 'Relative freq', 1: 'Density'} #, 2: 'Cumulative freq'}
-        self.assertDictEqual(expected,data)
+        fd = AutoHistogram(args.datafile, args.outputdir, args.showplots)
+        cfg = fd.getConfigurables()
+        cfg['COLUMN'] = args.column
+        cfg['BINWIDTH'] = args.binwidth
+        for c in cfg.keys():
+            print("config set: ", c, "=", cfg[c])
+        fd.setConfigurables(cfg)
+        self.fd = fd
 
     def test_histogram(self):
-        type = 0 #'Relative freq'
-        data = self.fd.generateHistogram(freq=type)
-        self.assertGreater(len(data),0)
+        self.fd.freq = 0 #'Relative freq'
+        data = self.fd.run()
+        outputfile = self.fd.run()
+        self.assertFalse(outputfile.endswith('DENSITY_HISTOGRAM.csv'))
 
     def test_histogram_density(self):
-        type = 1 #'Density'
-        data = self.fd.generateHistogram(freq=type)
-        self.assertGreater(len(data),0)
-
-    # def test_histogram_cumulative(self):
-    #     type = 2 #'Cumulative'
-    #     data = self.fd.generateHistogram(freq=type)
-    #     self.assertGreater(len(data),0)
+        self.fd.freq = 1 #'Density'
+        outputfile = self.fd.run()
+        self.assertTrue(outputfile.endswith('DENSITY_HISTOGRAM.csv'))

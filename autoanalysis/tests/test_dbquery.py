@@ -17,8 +17,8 @@ class TestDBquery(unittest.TestCase):
     def test_getConfig(self):
         configid = 'general'
         data = self.dbi.getConfig(configid)
-        expected = 4
-        self.assertEqual(len(data),expected)
+        expected = 0
+        self.assertGreater(len(data),expected)
 
     def test_getConfigByName(self):
         group = 'general'
