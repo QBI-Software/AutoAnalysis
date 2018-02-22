@@ -187,9 +187,11 @@ class ProcessThread(threading.Thread):
             event.set()
             lock.acquire(True)
             q = dict()
+            # connect to db
+            self.db.getconn()
             if isinstance(self.filenames,dict):
                 batch = True
-                total_files = len(self.filenames.keys())
+                total_files = len(self.filenames)-1
                 i = 0
                 for group in self.filenames.keys():
                     if group == 'all' or len(self.filenames[group])<=0:
@@ -198,7 +200,8 @@ class ProcessThread(threading.Thread):
                     msg = "%s run: count=%d of %d (%d percent)" % (self.processname, i, total_files, count)
                     print(msg)
                     logger.info(msg)
-                    wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
+                    #TODO fix this
+                    # wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
                     self.processBatch(self.filenames[group], q, group)
                     i += 1
 
@@ -211,7 +214,7 @@ class ProcessThread(threading.Thread):
                     msg = "%s run: count=%d of %d (%d percent)" % (self.processname, i, total_files, count)
                     print(msg)
                     logger.info(msg)
-                    wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
+                    #wx.PostEvent(self.wxObject, ResultEvent((count, self.row, i + 1, total_files, self.processname)))
                     self.processData(files[i], q)
 
             wx.PostEvent(self.wxObject, ResultEvent((100, self.row, total_files, total_files, self.processname)))
@@ -223,6 +226,8 @@ class ProcessThread(threading.Thread):
             # self.terminate()
             lock.release()
             event.clear()
+            # connect to db
+            self.db.closeconn()
 
     # ----------------------------------------------------------------------
     def processData(self, filename, q):
@@ -240,8 +245,6 @@ class ProcessThread(threading.Thread):
                 mkdir(outputdir)
         else:
             outputdir = self.output
-        # connect to db
-        self.db.getconn()
         # Instantiate module
         module = importlib.import_module(self.module_name)
         class_ = getattr(module, self.class_name)
@@ -263,8 +266,7 @@ class ProcessThread(threading.Thread):
             q[filename] = mod.run()
         else:
             q[filename] = None
-        # connect to db
-        self.db.closeconn()
+
 
     def processBatch(self, filelist, q, group=None):
         """
@@ -275,8 +277,7 @@ class ProcessThread(threading.Thread):
         """
         logger.info("Process Batch with filelist: %d", len(filelist))
         outputdir = self.output
-        # connect to db
-        self.db.getconn()
+
         # Instantiate module
         module = importlib.import_module(self.module_name)
         class_ = getattr(module, self.class_name)
@@ -293,8 +294,7 @@ class ProcessThread(threading.Thread):
             q[group] = mod.run()
         else:
             q[mod.base] = mod.run()
-        # connect to db
-        self.db.closeconn()
+
 
 
     # ----------------------------------------------------------------------

@@ -199,6 +199,9 @@ class ProcessPanel ( wx.Panel ):
 		self.btnLog = wx.Button( self, wx.ID_ANY, u"Show Log", wx.DefaultPosition, wx.DefaultSize, 0 )
 		bSizer16.Add( self.btnLog, 0, wx.ALL, 5 )
 		
+		self.m_button15 = wx.Button( self, wx.ID_ANY, u"Clear Window", wx.DefaultPosition, wx.DefaultSize, 0 )
+		bSizer16.Add( self.m_button15, 0, wx.ALL, 5 )
+		
 		
 		bSizer15.Add( bSizer16, 1, wx.ALL, 5 )
 		
@@ -234,6 +237,7 @@ class ProcessPanel ( wx.Panel ):
 		self.m_checkListProcess.Bind( wx.EVT_CHECKLISTBOX, self.OnShowDescription )
 		self.m_btnRunProcess.Bind( wx.EVT_BUTTON, self.OnRunScripts )
 		self.btnLog.Bind( wx.EVT_BUTTON, self.OnShowLog )
+		self.m_button15.Bind( wx.EVT_BUTTON, self.OnClearWindow )
 	
 	def __del__( self ):
 		pass
@@ -248,6 +252,9 @@ class ProcessPanel ( wx.Panel ):
 		event.Skip()
 	
 	def OnShowLog( self, event ):
+		event.Skip()
+	
+	def OnClearWindow( self, event ):
 		event.Skip()
 	
 

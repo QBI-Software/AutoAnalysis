@@ -494,14 +494,6 @@ class ProcessRunPanel(ProcessPanel):
 
         num_files = filepanel.m_dataViewListCtrl1.GetItemCount()
         outputdir = filepanel.txtOutputdir.GetValue()  # for batch processes
-        # expt = filepanel.m_tcSearch.GetValue()
-        # # reload logging to output to outputdir
-        # if len(outputdir) > 0:
-        #     self.controller.loadLogger(outputdir, expt)
-        # if len(expt) <= 0:
-        #     msg = 'No prefix for batch files. If required, enter in Files panel - prefix and re-run.'
-        #     self.Parent.Warn(msg)
-
         print('All Files:', num_files)
         try:
             self.db.getconn()
@@ -526,7 +518,6 @@ class ProcessRunPanel(ProcessPanel):
                         if self.controller.processes[p]['caption']==pcaption:
                             break
                     print("processname =", p)
-
                     self.controller.RunProcess(self, p, outputdir,filenames, row, showplots)
                     row = row + 1
 
@@ -555,6 +546,8 @@ class ProcessRunPanel(ProcessPanel):
         dlg.ShowModal()
         dlg.Destroy()
 
+    def OnClearWindow(self, event):
+        self.m_dataViewListCtrlRunning.DeleteAllItems()
 
 ########################################################################
 class AppMain(wx.Listbook):
