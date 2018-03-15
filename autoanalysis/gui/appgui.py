@@ -364,7 +364,7 @@ class WelcomePanel ( wx.Panel ):
 		
 		bSizer18 = wx.BoxSizer( wx.VERTICAL )
 		
-		self.m_staticText23 = wx.StaticText( self, wx.ID_ANY, u"Automated Analysis Framework", wx.DefaultPosition, wx.DefaultSize, 0 )
+		self.m_staticText23 = wx.StaticText( self, wx.ID_ANY, u"Automated Analysis Application", wx.DefaultPosition, wx.DefaultSize, 0 )
 		self.m_staticText23.Wrap( -1 )
 		self.m_staticText23.SetFont( wx.Font( 14, 71, 90, 90, False, wx.EmptyString ) )
 		
