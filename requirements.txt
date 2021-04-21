@@ -29,8 +29,8 @@ patsy==0.4.1
 pefile==2017.11.5
 plotly==2.2.3
 pluggy==0.6.0
+PyInstaller==3.6
 py==1.10.0
-PyInstaller==3.3.1
 pyparsing==2.2.0
 pypiwin32==220
 pytest==3.4.0
