@@ -22,7 +22,7 @@ macholib==1.9
 MarkupSafe==1.0
 matplotlib==2.1.1
 nbformat==4.4.0
-numpy==1.13.3
+numpy==1.22.0
 packaging==16.8
 pandas==0.21.1
 patsy==0.4.1
